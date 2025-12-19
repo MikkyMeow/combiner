@@ -1,45 +1,42 @@
 import ChatRoom from "../ui/chat-room";
-import { listMessages } from "../lib/chat/store";
-import { cookies, headers } from "next/headers";
-import { redirect } from "next/navigation";
-import { authService, SESSION_COOKIE_NAME } from "@/app/lib/auth/service";
+import type { ChatMessage } from "../lib/chat/types";
 
-async function warmupChatServer() {
-  const headerList = await headers();
-  const host = headerList.get("host");
-  if (!host) {
-    return;
-  }
-  const protocol = headerList.get("x-forwarded-proto") ?? "http";
-  const baseUrl = `${protocol}://${host}`;
-  try {
-    await fetch(`${baseUrl}/api/chat/socket`, { cache: "no-store" });
-  } catch (error) {
-    console.error("Не удалось прогреть чат-сервер", error);
-  }
-}
+const sampleMessages: ChatMessage[] = [
+  {
+    id: "page-1",
+    userId: "support",
+    author: "Команда Combiner",
+    content:
+      "Добро пожаловать в макет чата. Пока серверная часть отключена, но вы уже можете оценить оформление переписки.",
+    createdAt: "2025-12-20T09:00:00.000Z",
+  },
+  {
+    id: "page-2",
+    userId: "visitor",
+    author: "Гость",
+    content: "Спасибо за аккуратный дизайн. Жду момента, когда функциональность будет восстановлена.",
+    createdAt: "2025-12-20T09:02:00.000Z",
+  },
+  {
+    id: "page-3",
+    userId: "support",
+    author: "Команда Combiner",
+    content:
+      "Когда подключение вернётся, здесь появится настоящая переписка и отправка будет работать в реальном времени.",
+    createdAt: "2025-12-20T09:04:00.000Z",
+  },
+];
 
 export const metadata = {
   title: "Чат | Combiner",
 };
 
-export default async function ChatPage() {
-  const cookieStore = await cookies();
-  const sessionToken = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-  const user = await authService.getSessionUser(sessionToken);
-  if (!user) {
-    redirect("/login");
-  }
-
-  await warmupChatServer();
-
+export default function ChatPage() {
   const clientUser = {
-    id: user.id,
-    name: user.name ?? null,
-    email: user.email ?? null,
+    id: "client-user",
+    name: "Гость",
+    email: null,
   };
-
-  const initialMessages = listMessages();
 
   return (
     <section className="space-y-8">
@@ -48,25 +45,21 @@ export default async function ChatPage() {
           Combiner Chat
         </p>
         <h1 className="mt-3 text-4xl font-semibold text-zinc-900 dark:text-white">
-          Общайтесь в реальном времени
+          Чат поддержки Combiner
         </h1>
         <p className="mt-4 text-lg leading-relaxed text-zinc-600 dark:text-zinc-300">
-          Любой авторизованный пользователь может присоединиться к открытому
-          каналу. Мы синхронизируем историю, автопрокрутку и отправку сообщений
-          через вебсокеты, поэтому остаётся только печатать.
+          Эта страница сохраняет визуальную компоновку переписки. Пока серверное взаимодействие отключено, здесь можно наблюдать, как будет выглядеть интерфейс.
         </p>
         <ul className="mt-6 grid gap-4 text-sm text-zinc-600 dark:text-zinc-300 sm:grid-cols-2">
           <li className="rounded-2xl border border-zinc-200 p-4 dark:border-zinc-700">
-            Режим онлайн — сообщения отправляются мгновенно и сразу появляются у
-            всех участников.
+            Интерфейс ориентирован на внутреннюю коммуникацию команды и клиентов в Combiner.
           </li>
           <li className="rounded-2xl border border-zinc-200 p-4 dark:border-zinc-700">
-            История хранится в памяти сервера и передаётся при каждом новом
-            подключении.
+            Как только сервер снова будет доступен, обновление подключит сообщения и интерактивность.
           </li>
         </ul>
       </div>
-      <ChatRoom currentUser={clientUser} initialMessages={initialMessages} />
+      <ChatRoom currentUser={clientUser} messages={sampleMessages} />
     </section>
   );
 }

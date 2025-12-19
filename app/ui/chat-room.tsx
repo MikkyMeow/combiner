@@ -1,14 +1,5 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type FormEvent,
-  type KeyboardEvent,
-} from "react";
 import { CHAT_HISTORY_LIMIT } from "@/app/lib/chat/constants";
 import type { ChatMessage } from "@/app/lib/chat/types";
 
@@ -18,20 +9,37 @@ type ChatRoomProps = {
     name?: string | null;
     email?: string | null;
   };
-  initialMessages: ChatMessage[];
+  messages?: ChatMessage[];
 };
 
-type SocketEvent =
-  | {
-      type: "init";
-      payload?: { messages?: ChatMessage[] };
-    }
-  | {
-      type: "message:new";
-      payload?: ChatMessage;
-    };
-
 const MESSAGE_LIMIT = CHAT_HISTORY_LIMIT;
+
+const FALLBACK_MESSAGES: ChatMessage[] = [
+  {
+    id: "fallback-1",
+    userId: "support",
+    author: "Команда Combiner",
+    content:
+      "Привет! Пока серверная часть приостанавливает работу, но вёрстка уже готова. Напиши здесь что-нибудь, чтобы увидеть дизайн сообщения.",
+    createdAt: "2025-12-20T10:00:00.000Z",
+  },
+  {
+    id: "fallback-2",
+    userId: "visitor",
+    author: "Гость",
+    content:
+      "Отлично, вижу стиль чата, но пока что нельзя взаимодействовать с сервером. Жду полной версии.",
+    createdAt: "2025-12-20T10:05:00.000Z",
+  },
+  {
+    id: "fallback-3",
+    userId: "support",
+    author: "Команда Combiner",
+    content:
+      "Как только сервер снова будет доступен, здесь появятся реальные сообщения и кнопка отправки станет рабочей.",
+    createdAt: "2025-12-20T10:07:00.000Z",
+  },
+];
 
 function formatTime(value: string) {
   const date = new Date(value);
@@ -44,152 +52,14 @@ function formatTime(value: string) {
   });
 }
 
-export default function ChatRoom({
-  currentUser,
-  initialMessages,
-}: ChatRoomProps) {
-  const [messages, setMessages] =
-    useState<ChatMessage[]>(initialMessages ?? []);
-  const [connectionStatus, setConnectionStatus] = useState<
-    "connecting" | "connected" | "disconnected"
-  >("connecting");
-  const [draft, setDraft] = useState("");
-  const socketRef = useRef<WebSocket | null>(null);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-
-  const currentUserLabel = useMemo(
-    () => currentUser.name ?? currentUser.email ?? "Неизвестный пользователь",
-    [currentUser.email, currentUser.name],
-  );
-
-  useEffect(() => {
-    const container = scrollRef.current;
-    if (!container) {
-      return;
-    }
-    container.scrollTop = container.scrollHeight;
-  }, []);
-
-  useEffect(() => {
-    const container = scrollRef.current;
-    if (!container) {
-      return;
-    }
-    container.scrollTo({
-      top: container.scrollHeight,
-      behavior: "smooth",
-    });
-  }, [messages]);
-
-  useEffect(() => {
-    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
-    let isUnmounted = false;
-
-    function connect() {
-      setConnectionStatus("connecting");
-      const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-      const socket = new WebSocket(
-        `${protocol}://${window.location.host}/api/chat/socket`,
-      );
-      socketRef.current = socket;
-
-      socket.addEventListener("open", () => {
-        setConnectionStatus("connected");
-      });
-
-      socket.addEventListener("message", (event) => {
-        try {
-          const data = JSON.parse(String(event.data)) as SocketEvent;
-          if (data.type === "init" && data.payload?.messages) {
-            setMessages(data.payload.messages);
-            return;
-          }
-          if (data.type === "message:new" && data.payload) {
-            setMessages((prev) => {
-              const next = [...prev, data.payload as ChatMessage];
-              if (next.length > MESSAGE_LIMIT) {
-                return next.slice(next.length - MESSAGE_LIMIT);
-              }
-              return next;
-            });
-          }
-        } catch (error) {
-          console.error("Не удалось обработать событие сокета", error);
-        }
-      });
-
-      socket.addEventListener("close", () => {
-        socketRef.current = null;
-        setConnectionStatus("disconnected");
-        if (!isUnmounted) {
-          reconnectTimeout = setTimeout(() => {
-            void connect();
-          }, 3000);
-        }
-      });
-
-      socket.addEventListener("error", () => {
-        socket.close();
-      });
-    }
-
-    void connect();
-
-    return () => {
-      isUnmounted = true;
-      socketRef.current?.close();
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout);
-      }
-    };
-  }, []);
-
-  const handleSend = useCallback(() => {
-    const text = draft.trim();
-    if (!text) {
-      return;
-    }
-    const socket = socketRef.current;
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      return;
-    }
-    socket.send(
-      JSON.stringify({
-        type: "message:send",
-        payload: { content: text },
-      }),
-    );
-    setDraft("");
-  }, [draft]);
-
-  const onKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLTextAreaElement>) => {
-      if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault();
-        handleSend();
-      }
-    },
-    [handleSend],
-  );
-
-  const onSubmit = useCallback(
-    (event: FormEvent) => {
-      event.preventDefault();
-      handleSend();
-    },
-    [handleSend],
-  );
-
-  const statusText = useMemo(() => {
-    switch (connectionStatus) {
-      case "connected":
-        return "В сети";
-      case "connecting":
-        return "Подключаемся…";
-      case "disconnected":
-        return "Соединение потеряно, пытаемся снова…";
-    }
-  }, [connectionStatus]);
+export default function ChatRoom({ currentUser, messages }: ChatRoomProps) {
+  const displayMessages =
+    messages && messages.length > 0 ? messages : FALLBACK_MESSAGES;
+  const currentUserLabel =
+    currentUser.name ??
+    currentUser.email ??
+    "Гость Combiner Chat";
+  const statusText = "Чат доступен";
 
   return (
     <div className="rounded-3xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
@@ -199,11 +69,10 @@ export default function ChatRoom({
             Combiner Chat
           </p>
           <h2 className="mt-3 text-3xl font-semibold text-zinc-900 dark:text-white">
-            Общий канал
+            Основной чат
           </h2>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            Пишите в общий поток, мы синхронизируем сообщения между
-            участниками в реальном времени.
+            Наблюдай за тем, как будет выглядеть переписка в интерфейсе Combiner. Здесь пока только макет, но всё оформление уже на месте.
           </p>
         </div>
         <div className="rounded-2xl border border-zinc-200 px-4 py-3 text-sm dark:border-zinc-700">
@@ -219,35 +88,26 @@ export default function ChatRoom({
         <aside className="space-y-4 rounded-2xl border border-zinc-100 p-4 text-sm dark:border-zinc-900">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-zinc-500 dark:text-zinc-400">
-              Правила
+              Для кого
             </p>
             <p className="text-zinc-600 dark:text-zinc-400">
-              Сообщения видят все авторизованные пользователи. Не публикуйте
-              чувствительные данные.
+              Чат служит для быстрых вопросов внутри Combiner. Пока сервер отключён, вёрстка демонстрирует расположение элементов и подсказок.
             </p>
           </div>
           <div className="rounded-2xl border border-dashed border-zinc-200 p-4 dark:border-zinc-700">
             <p className="text-xs uppercase tracking-[0.3em] text-zinc-500 dark:text-zinc-400">
-              Шорткаты
+              Подсказки
             </p>
             <ul className="mt-3 space-y-1 text-zinc-600 dark:text-zinc-300">
-              <li>⌘⏎ или Ctrl+⏎ — отправить сообщение</li>
-              <li>Ограничение истории: {MESSAGE_LIMIT}</li>
-              <li>Строки поддерживаются — просто нажмите Enter</li>
+              <li>Используй Ctrl+Enter для новой строки в дизайне.</li>
+              <li>История ограничена до {MESSAGE_LIMIT} сообщений.</li>
+              <li>Нажми Enter, чтобы отправить фразу (после подключения).</li>
             </ul>
           </div>
-          {connectionStatus === "disconnected" && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-100">
-              Соединение разорвано, переподключаемся автоматически…
-            </div>
-          )}
         </aside>
         <div className="flex flex-col rounded-2xl border border-zinc-100 dark:border-zinc-900">
-          <div
-            ref={scrollRef}
-            className="flex-1 space-y-4 overflow-y-auto px-4 py-4"
-          >
-            {messages.map((message) => {
+          <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+            {displayMessages.map((message) => {
               const isOwn = message.userId === currentUser.id;
               return (
                 <article
@@ -260,7 +120,7 @@ export default function ChatRoom({
                 >
                   <header className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.3em] text-zinc-500 dark:text-zinc-400">
                     <span className="font-semibold text-zinc-900 dark:text-white">
-                      {isOwn ? "Вы" : message.author}
+                      {isOwn ? "Ты" : message.author}
                     </span>
                     <span className="text-zinc-400 dark:text-zinc-500">
                       {formatTime(message.createdAt)}
@@ -272,41 +132,34 @@ export default function ChatRoom({
                 </article>
               );
             })}
-            {messages.length === 0 && (
+            {displayMessages.length === 0 && (
               <div className="rounded-2xl border border-dashed border-zinc-200 p-6 text-center text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-                В чате пока пусто. Напишите первое сообщение!
+                Пока сообщений нет.
               </div>
             )}
           </div>
-          <form
-            onSubmit={onSubmit}
-            className="border-t border-zinc-100 p-4 dark:border-zinc-900"
-          >
+          <div className="border-t border-zinc-100 p-4 dark:border-zinc-900">
             <label className="sr-only" htmlFor="chat-message">
               Сообщение
             </label>
             <textarea
               id="chat-message"
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={onKeyDown}
-              placeholder="Введите сообщение…"
+              placeholder="Напиши сообщение, чтобы увидеть макет его отправки."
               className="w-full resize-none rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-white"
               rows={3}
             />
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <button
-                type="submit"
-                disabled={!draft.trim() || connectionStatus !== "connected"}
-                className="rounded-full bg-zinc-900 px-6 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition disabled:cursor-not-allowed disabled:bg-zinc-400 dark:bg-white dark:text-zinc-900 dark:disabled:bg-zinc-500/50"
+                type="button"
+                className="rounded-full bg-zinc-900 px-6 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white transition dark:bg-white dark:text-zinc-900"
               >
                 Отправить
               </button>
               <p className="text-xs uppercase tracking-[0.3em] text-zinc-500 dark:text-zinc-400">
-                ⌘⏎ или Ctrl+⏎ — отправка
+                Ctrl+Enter для новой строки
               </p>
             </div>
-          </form>
+          </div>
         </div>
       </div>
     </div>
