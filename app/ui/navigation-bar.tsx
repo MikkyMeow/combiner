@@ -14,10 +14,12 @@ type AuthUser = {
 const SESSION_ENDPOINT = "/api/auth/session";
 const LOGOUT_ENDPOINT = "/api/auth/logout";
 
-const NAV_LINKS = [
+const PUBLIC_NAV_LINKS = [
   { href: "/register", label: "Регистрация" },
   { href: "/login", label: "Вход" },
 ];
+
+const PRIVATE_NAV_LINKS = [{ href: "/chat", label: "Чат" }];
 
 export default function NavigationBar() {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -75,7 +77,7 @@ export default function NavigationBar() {
           Combiner
         </Link>
         <nav className="flex items-center gap-4">
-          {NAV_LINKS.map((link) => {
+          {(user ? PRIVATE_NAV_LINKS : PUBLIC_NAV_LINKS).map((link) => {
             const isActive = pathname === link.href;
             return (
               <Link
