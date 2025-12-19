@@ -1,5 +1,5 @@
 import Link from "next/link";
-import AuthPanel from "../ui/auth-panel";
+import LoginForm from "../ui/login-form";
 
 export const metadata = {
   title: "Вход | Combiner",
@@ -7,17 +7,13 @@ export const metadata = {
 
 export default function LoginPage() {
   return (
-    <>
-      <section className="space-y-4 text-center sm:text-left">
-        <p className="text-xs uppercase tracking-[0.4em] text-zinc-500 dark:text-zinc-400">
-          Добро пожаловать
-        </p>
-        <h1 className="text-4xl font-semibold">Вход</h1>
-        <p className="text-lg text-zinc-600 dark:text-zinc-300">
-          Авторизуйтесь через выбранный провайдер. Архитектура уже готова к
-          подключению социальных OAuth-логинов.
-        </p>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+    <section className="rounded-3xl border border-zinc-200 bg-white p-10 text-left shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="space-y-6 text-center sm:text-left">
+        <h1 className="text-4xl font-semibold text-zinc-900 dark:text-white">
+          Вход
+        </h1>
+        <LoginForm />
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
           Нет аккаунта?{" "}
           <Link
             href="/register"
@@ -26,9 +22,7 @@ export default function LoginPage() {
             Зарегистрироваться
           </Link>
         </p>
-      </section>
-
-      <AuthPanel mode="login" />
-    </>
+      </div>
+    </section>
   );
 }
