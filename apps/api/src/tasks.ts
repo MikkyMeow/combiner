@@ -1,5 +1,6 @@
 import { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { randomUUID } from "crypto";
+import { findProjectById } from "./projectsStore";
 
 type TaskRecord = {
   id: string;
@@ -8,11 +9,13 @@ type TaskRecord = {
   completed: boolean;
   createdAt: string;
   updatedAt: string;
+  projectId: string | null;
 };
 
 type TaskCreateBody = {
   title: string;
   description?: string;
+  projectId?: string;
 };
 
 type TaskUpdateBody = Partial<TaskCreateBody> & {
@@ -65,12 +68,25 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
         return reply.status(400).send({ message: "Title is required" });
       }
 
+      let projectId: string | null = null;
+      if (request.body.projectId !== undefined) {
+        const trimmedProjectId = request.body.projectId?.trim();
+        if (trimmedProjectId) {
+          const project = findProjectById(username, trimmedProjectId);
+          if (!project) {
+            return reply.status(400).send({ message: "Project not found" });
+          }
+          projectId = trimmedProjectId;
+        }
+      }
+
       const now = new Date().toISOString();
       const newTask: TaskRecord = {
         id: randomUUID(),
         title: trimmedTitle,
         description: request.body.description?.trim() ?? "",
         completed: false,
+        projectId,
         createdAt: now,
         updatedAt: now
       };
@@ -109,6 +125,19 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
 
       if (typeof request.body.completed === "boolean") {
         target.completed = request.body.completed;
+      }
+
+      if (request.body.projectId !== undefined) {
+        const trimmedProjectId = request.body.projectId?.trim() ?? "";
+        if (!trimmedProjectId) {
+          target.projectId = null;
+        } else {
+          const project = findProjectById(username, trimmedProjectId);
+          if (!project) {
+            return reply.status(400).send({ message: "Project not found" });
+          }
+          target.projectId = trimmedProjectId;
+        }
       }
 
       target.updatedAt = now;

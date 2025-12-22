@@ -1,13 +1,6 @@
 import { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { randomUUID } from "crypto";
-
-type ProjectRecord = {
-  id: string;
-  title: string;
-  description: string;
-  createdAt: string;
-  updatedAt: string;
-};
+import { ensureProjectList, type ProjectRecord } from "./projectsStore";
 
 type ProjectCreateBody = {
   title: string;
@@ -15,15 +8,6 @@ type ProjectCreateBody = {
 };
 
 type ProjectUpdateBody = Partial<ProjectCreateBody>;
-
-const projectsStore = new Map<string, ProjectRecord[]>();
-
-const ensureProjectList = (username: string) => {
-  if (!projectsStore.has(username)) {
-    projectsStore.set(username, []);
-  }
-  return projectsStore.get(username)!;
-};
 
 const projectsRoutes: FastifyPluginAsync = async (server) => {
   const ensureAuthenticated = async (request: FastifyRequest, reply: FastifyReply) => {

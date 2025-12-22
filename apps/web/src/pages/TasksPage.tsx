@@ -10,6 +10,15 @@ type Task = {
   completed: boolean;
   createdAt: string;
   updatedAt: string;
+  projectId: string | null;
+};
+
+type Project = {
+  id: string;
+  title: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type TasksPageProps = {
@@ -21,19 +30,23 @@ type TaskUpdatePayload = {
   title?: string;
   description?: string;
   completed?: boolean;
+  projectId?: string | null;
 };
 
 const TasksPage = ({ jwtToken, onNotify }: TasksPageProps) => {
   const [tasks, setTasks] = createSignal<Task[]>([]);
+  const [projects, setProjects] = createSignal<Project[]>([]);
   const [loading, setLoading] = createSignal(false);
   const [creating, setCreating] = createSignal(false);
   const [editing, setEditing] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [newTitle, setNewTitle] = createSignal("");
   const [newDescription, setNewDescription] = createSignal("");
+  const [newProjectId, setNewProjectId] = createSignal("");
   const [editingId, setEditingId] = createSignal<string | null>(null);
   const [editTitle, setEditTitle] = createSignal("");
   const [editDescription, setEditDescription] = createSignal("");
+  const [editProjectId, setEditProjectId] = createSignal("");
   const editingTask = () => tasks().find((task) => task.id === editingId());
 
   const notify = (message: string, type: NotificationType = "info") => {
@@ -72,6 +85,37 @@ const TasksPage = ({ jwtToken, onNotify }: TasksPageProps) => {
     notify(message, "error");
   };
 
+  const getProjectLabel = (projectId?: string | null) => {
+    if (!projectId) {
+      return "Unassigned";
+    }
+    return projects().find((project) => project.id === projectId)?.title ?? "Unknown project";
+  };
+
+  const fetchProjects = async () => {
+    if (!jwtToken) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${apiUrl()}/projects`, {
+        headers: getHeaders()
+      });
+
+      if (!response.ok) {
+        await handleFetchError(response);
+        return;
+      }
+
+      const data = (await response.json()) as { projects: Project[] };
+      setProjects(data.projects ?? []);
+    } catch (fetchError) {
+      const message = (fetchError as Error).message || "Unable to load projects.";
+      setError(message);
+      notify(message, "error");
+    }
+  };
+
   const fetchTasks = async () => {
     if (!jwtToken) {
       handleUnauthorized();
@@ -103,6 +147,7 @@ const TasksPage = ({ jwtToken, onNotify }: TasksPageProps) => {
 
   onMount(() => {
     void fetchTasks();
+    void fetchProjects();
   });
 
   const handleCreateTask = async (event: SubmitEvent) => {
@@ -129,6 +174,8 @@ const TasksPage = ({ jwtToken, onNotify }: TasksPageProps) => {
         body: JSON.stringify({
           title,
           description: newDescription().trim()
+          ,
+          projectId: newProjectId()
         })
       });
 
@@ -141,6 +188,7 @@ const TasksPage = ({ jwtToken, onNotify }: TasksPageProps) => {
       setTasks((current) => [createdTask, ...current]);
       setNewTitle("");
       setNewDescription("");
+      setNewProjectId("");
       notify("Task created", "success");
     } catch (fetchError) {
       const message = (fetchError as Error).message || "Unable to create task.";
@@ -223,6 +271,7 @@ const TasksPage = ({ jwtToken, onNotify }: TasksPageProps) => {
     setEditingId(task.id);
     setEditTitle(task.title);
     setEditDescription(task.description);
+    setEditProjectId(task.projectId ?? "");
   };
 
   const handleEditSubmit = async (event: SubmitEvent) => {
@@ -244,12 +293,13 @@ const TasksPage = ({ jwtToken, onNotify }: TasksPageProps) => {
     try {
       const updatedTask = await updateTask(
         id,
-        { title, description: editDescription().trim() },
+        { title, description: editDescription().trim(), projectId: editProjectId() },
         "Task updated"
       );
 
       if (updatedTask) {
         setEditingId(null);
+        setEditProjectId("");
       }
     } finally {
       setEditing(false);
@@ -258,6 +308,7 @@ const TasksPage = ({ jwtToken, onNotify }: TasksPageProps) => {
 
   const cancelEdit = () => {
     setEditingId(null);
+    setEditProjectId("");
   };
 
   return (
@@ -283,6 +334,21 @@ const TasksPage = ({ jwtToken, onNotify }: TasksPageProps) => {
             rows={3}
             placeholder="More details about what needs to be done"
           />
+        </label>
+        <label>
+          Project (optional)
+          <select
+            class="text-input"
+            value={newProjectId()}
+            onChange={(event) => setNewProjectId(event.currentTarget.value)}
+          >
+            <option value="">Unassigned</option>
+            <For each={projects()}>
+              {(project) => (
+                <option value={project.id}>{project.title}</option>
+              )}
+            </For>
+          </select>
         </label>
         <button class="primary" type="submit" disabled={creating()}>
           {creating() ? "Saving…" : "New Task"}
@@ -324,6 +390,21 @@ const TasksPage = ({ jwtToken, onNotify }: TasksPageProps) => {
                 onInput={(event) => setEditDescription(event.currentTarget.value)}
               />
             </label>
+            <label>
+              Project (optional)
+              <select
+                class="text-input"
+                value={editProjectId()}
+                onChange={(event) => setEditProjectId(event.currentTarget.value)}
+              >
+                <option value="">Unassigned</option>
+                <For each={projects()}>
+                  {(project) => (
+                    <option value={project.id}>{project.title}</option>
+                  )}
+                </For>
+              </select>
+            </label>
             <div class="edit-actions">
               <button type="button" class="ghost" onClick={cancelEdit}>
                 Cancel
@@ -345,6 +426,7 @@ const TasksPage = ({ jwtToken, onNotify }: TasksPageProps) => {
           <thead>
             <tr>
               <th>Title &amp; description</th>
+              <th>Project</th>
               <th>Status</th>
               <th>Updated</th>
               <th>Actions</th>
@@ -358,6 +440,7 @@ const TasksPage = ({ jwtToken, onNotify }: TasksPageProps) => {
                     <strong>{task.title}</strong>
                     <p class="table-description">{task.description || "No description provided."}</p>
                   </td>
+                  <td>{getProjectLabel(task.projectId)}</td>
                   <td>
                     <span class={`status-pill ${task.completed ? "completed" : ""}`}>
                       {task.completed ? "Completed" : "Pending"}
