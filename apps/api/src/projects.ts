@@ -1,6 +1,7 @@
 import { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { randomUUID } from "crypto";
-import { ensureProjectList, type ProjectRecord } from "./projectsStore";
+import { ensureProjectList, findProjectById, type ProjectRecord } from "./projectsStore";
+import { findTasksForProject } from "./tasksStore";
 
 type ProjectCreateBody = {
   title: string;
@@ -33,6 +34,23 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
     const projects = ensureProjectList(username);
     return { projects };
   });
+
+  server.get<{ Params: { id: string } }>(
+    "/projects/:id",
+    { preValidation: [ensureAuthenticated] },
+    async (request, reply) => {
+      const username = requireUser(request, reply);
+      if (!username) return;
+
+      const project = findProjectById(username, request.params.id);
+      if (!project) {
+        return reply.status(404).send({ message: "Project not found" });
+      }
+
+      const tasks = findTasksForProject(username, project.id);
+      return { project, tasks };
+    }
+  );
 
   server.post<{ Body: ProjectCreateBody }>(
     "/projects",

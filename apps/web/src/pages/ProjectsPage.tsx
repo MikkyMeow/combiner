@@ -14,6 +14,7 @@ type Project = {
 type ProjectsPageProps = {
   jwtToken: string | null;
   onNotify?: (message: string, type?: NotificationType) => void;
+  onNavigate?: (path: string) => void;
 };
 
 type ProjectUpdatePayload = {
@@ -21,7 +22,7 @@ type ProjectUpdatePayload = {
   description?: string;
 };
 
-const ProjectsPage = ({ jwtToken, onNotify }: ProjectsPageProps) => {
+const ProjectsPage = ({ jwtToken, onNotify, onNavigate }: ProjectsPageProps) => {
   const [projects, setProjects] = createSignal<Project[]>([]);
   const [loading, setLoading] = createSignal(false);
   const [creating, setCreating] = createSignal(false);
@@ -420,6 +421,13 @@ const ProjectsPage = ({ jwtToken, onNotify }: ProjectsPageProps) => {
                   </td>
                   <td>
                     <div class="task-actions">
+                      <button
+                        type="button"
+                        class="ghost"
+                        onClick={() => onNavigate?.(`/projects/${project.id}`)}
+                      >
+                        View
+                      </button>
                       <button type="button" class="ghost" onClick={() => startEdit(project)}>
                         Edit
                       </button>

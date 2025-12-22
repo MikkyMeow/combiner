@@ -3,6 +3,7 @@ import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import TasksPage from "./pages/TasksPage";
 import ProjectsPage from "./pages/ProjectsPage";
+import ProjectPage from "./pages/ProjectPage";
 import { getRoutes } from "./routes";
 import NotificationStack from "./components/notifications/NotificationStack";
 import { useNotifications } from "./components/notifications/useNotifications";
@@ -75,6 +76,9 @@ const App = () => {
     navigate("/login");
   };
 
+  const isProjectDetailPath = (path: string) =>
+    /^\/projects\/[^/]+$/.test(path);
+
   onMount(() => {
     const handleUnload = () => saveScroll(page());
     const handleScroll = () => saveScroll(page());
@@ -87,8 +91,12 @@ const App = () => {
       window.history.scrollRestoration = "auto";
     });
 
-    if (initialToken && page() !== "/tasks") {
-      navigate("/tasks");
+    if (initialToken) {
+      const currentPath = page();
+      const available = routes().map((route) => route.path);
+      if (!available.includes(currentPath) && !isProjectDetailPath(currentPath)) {
+        navigate("/tasks");
+      }
     }
   });
 
@@ -97,7 +105,8 @@ const App = () => {
   createEffect(() => {
     const available = routes().map((route) => route.path);
     if (available.length === 0) return;
-    if (!available.includes(page())) {
+    const currentPath = page();
+    if (!available.includes(currentPath) && !isProjectDetailPath(currentPath)) {
       navigate(available[0]);
     }
   });
@@ -112,6 +121,19 @@ const App = () => {
   });
 
   const renderPage = () => {
+    const match = page().match(/^\/projects\/([^/]+)$/);
+    if (match) {
+      const projectId = decodeURIComponent(match[1]);
+      return (
+        <ProjectPage
+          projectId={projectId}
+          jwtToken={jwtToken()}
+          onNotify={enqueueNotification}
+          onNavigate={navigate}
+        />
+      );
+    }
+
     switch (page()) {
       case "/login":
         return <LoginPage onAuthenticated={onAuthenticated} />;
@@ -137,6 +159,7 @@ const App = () => {
           <ProjectsPage
             jwtToken={jwtToken()}
             onNotify={enqueueNotification}
+            onNavigate={navigate}
           />
         );
       default:

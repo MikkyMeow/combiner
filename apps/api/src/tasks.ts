@@ -1,16 +1,7 @@
 import { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { randomUUID } from "crypto";
 import { findProjectById } from "./projectsStore";
-
-type TaskRecord = {
-  id: string;
-  title: string;
-  description: string;
-  completed: boolean;
-  createdAt: string;
-  updatedAt: string;
-  projectId: string | null;
-};
+import { ensureTaskList, TaskRecord } from "./tasksStore";
 
 type TaskCreateBody = {
   title: string;
@@ -22,14 +13,6 @@ type TaskUpdateBody = Partial<TaskCreateBody> & {
   completed?: boolean;
 };
 
-const tasksStore = new Map<string, TaskRecord[]>();
-
-const ensureTaskList = (username: string) => {
-  if (!tasksStore.has(username)) {
-    tasksStore.set(username, []);
-  }
-  return tasksStore.get(username)!;
-};
 
 const tasksRoutes: FastifyPluginAsync = async (server) => {
   const ensureAuthenticated = async (request: FastifyRequest, reply: FastifyReply) => {
