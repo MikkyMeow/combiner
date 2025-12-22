@@ -34,6 +34,7 @@ const TasksPage = ({ jwtToken, onNotify }: TasksPageProps) => {
   const [editingId, setEditingId] = createSignal<string | null>(null);
   const [editTitle, setEditTitle] = createSignal("");
   const [editDescription, setEditDescription] = createSignal("");
+  const editingTask = () => tasks().find((task) => task.id === editingId());
 
   const notify = (message: string, type: NotificationType = "info") => {
     onNotify?.(message, type);
@@ -300,66 +301,93 @@ const TasksPage = ({ jwtToken, onNotify }: TasksPageProps) => {
         <p class="helper-text">You currently have no tasks.</p>
       </Show>
 
-      <div class="tasks-list">
-        <For each={tasks()}>
-          {(task) => (
-            <article class={`task-card ${task.completed ? "completed" : ""}`}>
-              <header class="task-header">
-                <strong>{task.title}</strong>
-                <div class="task-actions">
-                  <button
-                    type="button"
-                    class="ghost"
-                    onClick={() => handleToggleCompleted(task)}
-                  >
-                    {task.completed ? "Undo" : "Complete"}
-                  </button>
-                  <button type="button" class="ghost" onClick={() => startEdit(task)}>
-                    Edit
-                  </button>
-                  <button type="button" class="ghost" onClick={() => handleDelete(task.id)}>
-                    Delete
-                  </button>
-                </div>
-              </header>
-              <p>{task.description || "No description provided."}</p>
-              <div class="task-meta">
-                <span>Updated {new Date(task.updatedAt).toLocaleString()}</span>
-              </div>
+      <Show when={editingId()}>
+        <div class="edit-modal-wrapper">
+          <section class="edit-panel">
+            <h2>Editing task</h2>
+            <form onSubmit={handleEditSubmit}>
+            <label>
+              Title
+              <input
+                class="text-input"
+                value={editTitle()}
+                onInput={(event) => setEditTitle(event.currentTarget.value)}
+                required
+              />
+            </label>
+            <label>
+              Description
+              <textarea
+                class="text-input"
+                rows={3}
+                value={editDescription()}
+                onInput={(event) => setEditDescription(event.currentTarget.value)}
+              />
+            </label>
+            <div class="edit-actions">
+              <button type="button" class="ghost" onClick={cancelEdit}>
+                Cancel
+              </button>
+              <button class="primary" type="submit" disabled={editing()}>
+                {editing() ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </form>
+          <p class="helper-text">
+            Editing: <strong>{editingTask()?.title || "…"}</strong>
+          </p>
+          </section>
+        </div>
+      </Show>
 
-              <Show when={editingId() === task.id}>
-                <form class="task-editor" onSubmit={handleEditSubmit}>
-                  <label>
-                    Title
-                    <input
-                      class="text-input"
-                      value={editTitle()}
-                      onInput={(event) => setEditTitle(event.currentTarget.value)}
-                      required
-                    />
-                  </label>
-                  <label>
-                    Description
-                    <textarea
-                      class="text-input"
-                      rows={3}
-                      value={editDescription()}
-                      onInput={(event) => setEditDescription(event.currentTarget.value)}
-                    />
-                  </label>
-                  <div class="edit-actions">
-                    <button type="button" class="ghost" onClick={cancelEdit}>
-                      Cancel
-                    </button>
-                    <button class="primary" type="submit" disabled={editing()}>
-                      {editing() ? "Saving…" : "Save"}
-                    </button>
-                  </div>
-                </form>
-              </Show>
-            </article>
-          )}
-        </For>
+      <div class="tasks-table-wrapper">
+        <table class="tasks-table">
+          <thead>
+            <tr>
+              <th>Title &amp; description</th>
+              <th>Status</th>
+              <th>Updated</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <For each={tasks()}>
+              {(task) => (
+                <tr class={task.completed ? "completed" : ""}>
+                  <td>
+                    <strong>{task.title}</strong>
+                    <p class="table-description">{task.description || "No description provided."}</p>
+                  </td>
+                  <td>
+                    <span class={`status-pill ${task.completed ? "completed" : ""}`}>
+                      {task.completed ? "Completed" : "Pending"}
+                    </span>
+                  </td>
+                  <td>
+                    <span>Updated {new Date(task.updatedAt).toLocaleString()}</span>
+                  </td>
+                  <td>
+                    <div class="task-actions">
+                      <button
+                        type="button"
+                        class="ghost"
+                        onClick={() => handleToggleCompleted(task)}
+                      >
+                        {task.completed ? "Undo" : "Complete"}
+                      </button>
+                      <button type="button" class="ghost" onClick={() => startEdit(task)}>
+                        Edit
+                      </button>
+                      <button type="button" class="ghost" onClick={() => handleDelete(task.id)}>
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </For>
+          </tbody>
+        </table>
       </div>
     </section>
   );
