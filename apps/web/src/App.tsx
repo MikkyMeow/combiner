@@ -1,21 +1,12 @@
-import { createResource, createSignal, createEffect, onCleanup, Resource } from "solid-js";
-import HomePage from "./pages/HomePage";
+import { createSignal, createEffect, onCleanup, createMemo } from "solid-js";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import TasksPage from "./pages/TasksPage";
+import { getRoutes } from "./routes";
 
 const apiUrl = () => import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
-const fetchMessage = async () => {
-  const response = await fetch(`${apiUrl()}/hello`);
-  if (!response.ok) {
-    throw new Error("Не удалось получить ответ от сервера");
-  }
-  const data = (await response.json()) as { message?: string };
-  return data.message ?? "Нет сообщения";
-};
-
 const App = () => {
-  const [message] = createResource(fetchMessage);
   const [page, setPage] = createSignal(window.location.pathname || "/");
   const [loginUsername, setLoginUsername] = createSignal("");
   const [loginPassword, setLoginPassword] = createSignal("");
@@ -61,7 +52,7 @@ const App = () => {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message ?? "Что-то пошло не так");
+        throw new Error(data.message ?? "Произошла ошибка на сервере");
       }
 
       if (endpoint === "/login" && data.token) {
@@ -88,6 +79,7 @@ const App = () => {
       (token) => {
         setJwtToken(token);
         fetchProfile(token);
+        navigate("/tasks");
       }
     );
   };
@@ -119,38 +111,49 @@ const App = () => {
     }
   };
 
+  const routes = createMemo(() => getRoutes(!!jwtToken()));
+
+  createEffect(() => {
+    const available = routes().map((route) => route.path);
+    if (available.length === 0) return;
+    if (!available.includes(page())) {
+      navigate(available[0]);
+    }
+  });
+
   const renderPage = () => {
-    if (page() === "/login") {
-      return (
-        <LoginPage
-          username={loginUsername()}
-          password={loginPassword()}
-          onUpdateUsername={setLoginUsername}
-          onUpdatePassword={setLoginPassword}
-          onSubmit={handleLogin}
-          loading={loginLoading()}
-          result={loginResult()}
-          token={jwtToken()}
-          profileInfo={profileInfo()}
-        />
-      );
+    switch (page()) {
+      case "/login":
+        return (
+          <LoginPage
+            username={loginUsername()}
+            password={loginPassword()}
+            onUpdateUsername={setLoginUsername}
+            onUpdatePassword={setLoginPassword}
+            onSubmit={handleLogin}
+            loading={loginLoading()}
+            result={loginResult()}
+            token={jwtToken()}
+            profileInfo={profileInfo()}
+          />
+        );
+      case "/register":
+        return (
+          <RegisterPage
+            username={registerUsername()}
+            password={registerPassword()}
+            onUpdateUsername={setRegisterUsername}
+            onUpdatePassword={setRegisterPassword}
+            onSubmit={handleRegister}
+            loading={registerLoading()}
+            result={registerResult()}
+          />
+        );
+      case "/tasks":
+        return <TasksPage />;
+      default:
+        return null;
     }
-
-    if (page() === "/register") {
-      return (
-        <RegisterPage
-          username={registerUsername()}
-          password={registerPassword()}
-          onUpdateUsername={setRegisterUsername}
-          onUpdatePassword={setRegisterPassword}
-          onSubmit={handleRegister}
-          loading={registerLoading()}
-          result={registerResult()}
-        />
-      );
-    }
-
-    return <HomePage messageResource={message} />;
   };
 
   return (
@@ -158,15 +161,15 @@ const App = () => {
       <nav class="top-nav">
         <h1 class="site-title">Combiner Auth</h1>
         <div class="nav-actions">
-          <button type="button" onClick={() => navigate("/")} class="nav-link">
-            Главная
-          </button>
-          <button type="button" onClick={() => navigate("/login")} class="nav-link">
-            Вход
-          </button>
-          <button type="button" onClick={() => navigate("/register")} class="nav-link">
-            Регистрация
-          </button>
+          {routes().map((route) => (
+            <button
+              type="button"
+              class="nav-link"
+              onClick={() => navigate(route.path)}
+            >
+              {route.label}
+            </button>
+          ))}
         </div>
       </nav>
       <div class="content">{renderPage()}</div>
