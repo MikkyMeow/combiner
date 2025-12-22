@@ -1,5 +1,5 @@
 import { createSignal } from "solid-js";
-import { NotificationType } from "../components/notifications/useNotifications";
+import type { NotificationType } from "../components/notifications/useNotifications";
 
 const apiUrl = () => import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
@@ -11,6 +11,7 @@ type RegisterPageProps = {
 const RegisterPage = ({ onSuccess, onNotify }: RegisterPageProps) => {
   const [username, setUsername] = createSignal("");
   const [password, setPassword] = createSignal("");
+  const [confirmPassword, setConfirmPassword] = createSignal("");
   const [loading, setLoading] = createSignal(false);
   const [result, setResult] = createSignal<string | null>(null);
 
@@ -18,8 +19,19 @@ const RegisterPage = ({ onSuccess, onNotify }: RegisterPageProps) => {
     onNotify?.(message, type);
   };
 
+  const passwordsMatch = () => password() === confirmPassword();
+  const showPasswordMismatch = () =>
+    confirmPassword().length > 0 && !passwordsMatch();
+
   const handleRegister = async (event: SubmitEvent) => {
     event.preventDefault();
+    if (!passwordsMatch()) {
+      const mismatchMessage = "Пароли не совпадают.";
+      setResult(mismatchMessage);
+      notify(mismatchMessage, "error");
+      return;
+    }
+
     setLoading(true);
     setResult(null);
 
@@ -56,9 +68,9 @@ const RegisterPage = ({ onSuccess, onNotify }: RegisterPageProps) => {
 
   return (
     <form class="form-panel" onSubmit={handleRegister}>
-      <h2>Create an account</h2>
+      <h2>Создать аккаунт</h2>
       <label>
-        Username
+        Имя пользователя
         <input
           class="text-input"
           value={username()}
@@ -67,7 +79,7 @@ const RegisterPage = ({ onSuccess, onNotify }: RegisterPageProps) => {
         />
       </label>
       <label>
-        Password
+        Пароль
         <input
           class="text-input"
           type="password"
@@ -76,8 +88,21 @@ const RegisterPage = ({ onSuccess, onNotify }: RegisterPageProps) => {
           required
         />
       </label>
-      <button class="primary" type="submit" disabled={loading()}>
-        {loading() ? "Submitting..." : "Register"}
+      <label>
+        Повторите пароль
+        <input
+          class="text-input"
+          type="password"
+          value={confirmPassword()}
+          onInput={(event) => setConfirmPassword(event.currentTarget.value)}
+          required
+        />
+        {showPasswordMismatch() && (
+          <p class="helper-text">Пароли не совпадают.</p>
+        )}
+      </label>
+      <button class="primary" type="submit" disabled={loading() || !passwordsMatch()}>
+        {loading() ? "Отправка..." : "Зарегистрироваться"}
       </button>
       {result() && <p class="helper-text">{result()}</p>}
     </form>
