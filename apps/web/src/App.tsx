@@ -2,6 +2,7 @@ import { createSignal, createEffect, createMemo, onCleanup, onMount } from "soli
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import TasksPage from "./pages/TasksPage";
+import ProjectsPage from "./pages/ProjectsPage";
 import { getRoutes } from "./routes";
 import NotificationStack from "./components/notifications/NotificationStack";
 import { useNotifications } from "./components/notifications/useNotifications";
@@ -127,6 +128,13 @@ const App = () => {
       case "/tasks":
         return (
           <TasksPage
+            jwtToken={jwtToken()}
+            onNotify={enqueueNotification}
+          />
+        );
+      case "/projects":
+        return (
+          <ProjectsPage
             jwtToken={jwtToken()}
             onNotify={enqueueNotification}
           />
