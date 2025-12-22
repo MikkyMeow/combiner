@@ -1,7 +1,7 @@
 :root {
   font-family: "Inter", "Segoe UI", system-ui, sans-serif;
   color: #0f172a;
-  background-color: #f8fafc;
+  background-color: #0f172a;
 }
 
 * {
@@ -11,28 +11,147 @@
 body {
   margin: 0;
   min-height: 100vh;
+  background: radial-gradient(circle at top, #1d4ed8, #0f172a 45%);
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.top-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  background: rgba(15, 23, 42, 0.85);
+  color: #f1f5f9;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.site-title {
+  margin: 0;
+  font-size: 1.2rem;
+  letter-spacing: 0.05em;
+}
+
+.nav-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.nav-link {
+  background: transparent;
+  border: 1px solid rgba(248, 250, 252, 0.6);
+  color: inherit;
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.nav-link:hover {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.content {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 2.5rem 1rem;
 }
 
-main {
-  padding: 2rem;
-  border-radius: 16px;
+.form-panel,
+.home-card {
+  width: min(520px, 90vw);
   background: #ffffff;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.1);
-  text-align: center;
-  max-width: 24rem;
+  border-radius: 24px;
+  padding: 2rem;
+  box-shadow: 0 25px 60px rgba(15, 23, 42, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  text-align: left;
 }
 
-h1 {
+.form-panel h2,
+.home-card h1 {
   margin: 0;
   font-size: 1.8rem;
-  color: #111827;
+  color: #0f172a;
 }
 
-p {
-  margin-top: 1rem;
-  font-size: 1.1rem;
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.text-input {
+  border-radius: 12px;
+  border: 1px solid #cbd5f5;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  background: #f8fafc;
+}
+
+.primary {
+  border: none;
+  border-radius: 14px;
+  padding: 0.9rem;
+  font-size: 1rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  color: #fff;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.primary:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.helper-text {
+  margin: 0;
+  color: #2563eb;
+  font-size: 0.9rem;
+}
+
+.profile-card {
+  background: #f1f5f9;
+  border-radius: 14px;
+  padding: 0.9rem;
+  font-size: 0.85rem;
+  color: #0f172a;
+  overflow-x: auto;
+}
+
+.home-card ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.home-card li {
+  font-size: 0.95rem;
   color: #475569;
+}
+
+.home-card code {
+  background: #eef2ff;
+  padding: 0.1rem 0.45rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
 }
