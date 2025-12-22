@@ -1,8 +1,10 @@
-import { createSignal, createEffect, onCleanup, createMemo, onMount } from "solid-js";
+import { createSignal, createEffect, createMemo, onCleanup, onMount } from "solid-js";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import TasksPage from "./pages/TasksPage";
 import { getRoutes } from "./routes";
+import NotificationStack from "./components/notifications/NotificationStack";
+import { useNotifications } from "./components/notifications/useNotifications";
 
 const initialToken =
   typeof window !== "undefined" ? localStorage.getItem("jwtToken") : null;
@@ -10,6 +12,7 @@ const initialToken =
 const App = () => {
   const [page, setPage] = createSignal(window.location.pathname || "/");
   const [jwtToken, setJwtToken] = createSignal<string | null>(initialToken ?? null);
+  const { notifications, enqueueNotification, dismissNotification } = useNotifications();
 
   createEffect(() => {
     const handler = () => setPage(window.location.pathname || "/");
@@ -63,7 +66,15 @@ const App = () => {
       case "/login":
         return <LoginPage onAuthenticated={onAuthenticated} />;
       case "/register":
-        return <RegisterPage onSuccess={() => navigate("/login")} />;
+        return (
+          <RegisterPage
+            onSuccess={() => {
+              enqueueNotification("Registration succeeded! Please log in to continue.", "success");
+              navigate("/login");
+            }}
+            onNotify={enqueueNotification}
+          />
+        );
       case "/tasks":
         return <TasksPage />;
       default:
@@ -93,6 +104,10 @@ const App = () => {
         </div>
       </nav>
       <div class="content">{renderPage()}</div>
+      <NotificationStack
+        notifications={notifications()}
+        onDismiss={dismissNotification}
+      />
     </div>
   );
 };

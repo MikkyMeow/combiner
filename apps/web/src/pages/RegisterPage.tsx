@@ -1,16 +1,22 @@
 import { createSignal } from "solid-js";
+import { NotificationType } from "../components/notifications/useNotifications";
 
 const apiUrl = () => import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
 type RegisterPageProps = {
   onSuccess?: () => void;
+  onNotify?: (message: string, type?: NotificationType) => void;
 };
 
-const RegisterPage = ({ onSuccess }: RegisterPageProps) => {
+const RegisterPage = ({ onSuccess, onNotify }: RegisterPageProps) => {
   const [username, setUsername] = createSignal("");
   const [password, setPassword] = createSignal("");
   const [loading, setLoading] = createSignal(false);
   const [result, setResult] = createSignal<string | null>(null);
+
+  const notify = (message: string, type: NotificationType = "info") => {
+    onNotify?.(message, type);
+  };
 
   const handleRegister = async (event: SubmitEvent) => {
     event.preventDefault();
@@ -29,14 +35,20 @@ const RegisterPage = ({ onSuccess }: RegisterPageProps) => {
       const data = await response.json();
 
       if (!response.ok) {
-        setResult(data.message ?? "Не удалось зарегистрировать пользователя");
+        const errorMessage = data.message ?? "Registration failed. Please try again.";
+        setResult(errorMessage);
+        notify(errorMessage, "error");
         return;
       }
 
-      setResult(data.message ?? "Регистрация прошла успешно");
+      const successMessage = data.message ?? "Account created successfully.";
+      setResult(successMessage);
+      notify(successMessage, "success");
       onSuccess?.();
     } catch (error) {
-      setResult((error as Error).message);
+      const errorMessage = (error as Error).message || "An unexpected error occurred.";
+      setResult(errorMessage);
+      notify(errorMessage, "error");
     } finally {
       setLoading(false);
     }
@@ -44,9 +56,9 @@ const RegisterPage = ({ onSuccess }: RegisterPageProps) => {
 
   return (
     <form class="form-panel" onSubmit={handleRegister}>
-      <h2>Регистрация</h2>
+      <h2>Create an account</h2>
       <label>
-        Имя пользователя
+        Username
         <input
           class="text-input"
           value={username()}
@@ -55,7 +67,7 @@ const RegisterPage = ({ onSuccess }: RegisterPageProps) => {
         />
       </label>
       <label>
-        Пароль
+        Password
         <input
           class="text-input"
           type="password"
@@ -65,7 +77,7 @@ const RegisterPage = ({ onSuccess }: RegisterPageProps) => {
         />
       </label>
       <button class="primary" type="submit" disabled={loading()}>
-        {loading() ? "Отправка…" : "Зарегистрироваться"}
+        {loading() ? "Submitting..." : "Register"}
       </button>
       {result() && <p class="helper-text">{result()}</p>}
     </form>
