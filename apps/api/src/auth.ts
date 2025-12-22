@@ -1,5 +1,6 @@
 import { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import fastifyJwt, { FastifyJWTOptions } from "@fastify/jwt";
+import fastifyPlugin from "fastify-plugin";
 
 type UserRecord = { password: string };
 
@@ -33,7 +34,7 @@ const jwtOptions: FastifyJWTOptions = {
 };
 
 const authRoutes: FastifyPluginAsync = async (server) => {
-  server.register(fastifyJwt, jwtOptions);
+  await server.register(fastifyJwt, jwtOptions);
 
   server.decorate("authenticate", async (request, reply) => {
     await request.jwtVerify();
@@ -71,4 +72,4 @@ const authRoutes: FastifyPluginAsync = async (server) => {
   }));
 };
 
-export default authRoutes;
+export default fastifyPlugin(authRoutes);

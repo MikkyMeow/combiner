@@ -14,13 +14,51 @@ const App = () => {
   const [jwtToken, setJwtToken] = createSignal<string | null>(initialToken ?? null);
   const { notifications, enqueueNotification, dismissNotification } = useNotifications();
 
+  const scrollKey = (path: string) => `scroll-position:${path}`;
+
+  const canPersistScroll = () => typeof window !== "undefined" && "sessionStorage" in window;
+
+  const saveScroll = (path: string) => {
+    if (!canPersistScroll()) return;
+    try {
+      window.sessionStorage.setItem(scrollKey(path), window.scrollY.toString());
+    } catch {
+      /* ignore storage exceptions */
+    }
+  };
+
+  let restoreHandle: number | null = null;
+
+  const restoreScroll = (path: string) => {
+    if (!canPersistScroll()) return;
+    const stored = window.sessionStorage.getItem(scrollKey(path));
+    if (!stored) return;
+    const value = Number(stored);
+    if (Number.isNaN(value)) return;
+    if (restoreHandle !== null) {
+      window.cancelAnimationFrame(restoreHandle);
+    }
+    restoreHandle = window.requestAnimationFrame(() => {
+      window.scrollTo(0, value);
+      restoreHandle = null;
+    });
+  };
+
   createEffect(() => {
-    const handler = () => setPage(window.location.pathname || "/");
+    const handler = () => {
+      saveScroll(page());
+      setPage(window.location.pathname || "/");
+    };
     window.addEventListener("popstate", handler);
     onCleanup(() => window.removeEventListener("popstate", handler));
   });
 
+  createEffect(() => {
+    restoreScroll(page());
+  });
+
   const navigate = (target: string) => {
+    saveScroll(page());
     window.history.pushState(null, "", target);
     setPage(target);
   };
@@ -37,6 +75,17 @@ const App = () => {
   };
 
   onMount(() => {
+    const handleUnload = () => saveScroll(page());
+    const handleScroll = () => saveScroll(page());
+    window.history.scrollRestoration = "manual";
+    window.addEventListener("beforeunload", handleUnload);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    onCleanup(() => {
+      window.removeEventListener("beforeunload", handleUnload);
+      window.removeEventListener("scroll", handleScroll);
+      window.history.scrollRestoration = "auto";
+    });
+
     if (initialToken && page() !== "/tasks") {
       navigate("/tasks");
     }
@@ -76,7 +125,12 @@ const App = () => {
           />
         );
       case "/tasks":
-        return <TasksPage />;
+        return (
+          <TasksPage
+            jwtToken={jwtToken()}
+            onNotify={enqueueNotification}
+          />
+        );
       default:
         return null;
     }

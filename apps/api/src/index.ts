@@ -1,16 +1,19 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import authRoutes from "./auth";
+import tasksRoutes from "./tasks";
 
 const server = Fastify({ logger: true });
 
 server.register(cors, { origin: true });
-server.register(authRoutes);
 
 server.get("/hello", async () => ({ message: "Hello from backend" }));
 
 const start = async () => {
   try {
+    await server.register(authRoutes);
+    await server.register(tasksRoutes);
+
     await server.listen({
       port: 3000,
       host: "0.0.0.0"
