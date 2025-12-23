@@ -5,6 +5,7 @@ export type NoteRecord = {
   title: string;
   content: string;
   tags: string[];
+  projectId: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -14,6 +15,7 @@ const mapRow = (row: NoteRow): NoteRecord => ({
   title: row.title,
   content: row.content,
   tags: row.tags,
+  projectId: row.projectId,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt
 });
@@ -22,6 +24,14 @@ export const listNotes = (username: string): NoteRecord[] => {
   const state = loadDatabase();
   return state.notes
     .filter((note) => note.username === username)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .map(mapRow);
+};
+
+export const findNotesForProject = (username: string, projectId: string): NoteRecord[] => {
+  const state = loadDatabase();
+  return state.notes
+    .filter((note) => note.username === username && note.projectId === projectId)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     .map(mapRow);
 };
@@ -46,6 +56,7 @@ type NoteUpdatePayload = {
   title?: string;
   content?: string;
   tags?: string[];
+  projectId?: string | null;
   updatedAt: string;
 };
 
@@ -70,6 +81,10 @@ export const updateNote = (
 
   if (payload.tags !== undefined) {
     target.tags = payload.tags;
+  }
+
+  if (payload.projectId !== undefined) {
+    target.projectId = payload.projectId;
   }
 
   target.updatedAt = payload.updatedAt;

@@ -43,6 +43,7 @@ export type NoteRow = {
   tags: string[];
   createdAt: string;
   updatedAt: string;
+  projectId: string | null;
 };
 
 export type DatabaseState = {
@@ -69,7 +70,10 @@ const normalizeState = (payload: Partial<DatabaseState>): DatabaseState => ({
   users: payload.users ?? [],
   projects: payload.projects ?? [],
   tasks: payload.tasks ?? [],
-  notes: payload.notes ?? []
+  notes: (payload.notes ?? []).map((note) => ({
+    ...note,
+    projectId: note.projectId ?? null
+  }))
 });
 
 export const loadDatabase = (): DatabaseState => {

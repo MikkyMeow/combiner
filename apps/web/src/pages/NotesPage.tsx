@@ -8,6 +8,7 @@ type Note = {
   title: string;
   content: string;
   tags: string[];
+  projectId: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -221,14 +222,17 @@ const NotesPage = ({ jwtToken, onNotify }: NotesPageProps) => {
         <div class="knowledge-list">
           <For each={notes()}>
             {(note) => (
-              <article class="knowledge-item">
-                <div class="knowledge-item-header">
-                  <strong>{note.title}</strong>
-                  <span class="status-pill">
-                    Updated {new Date(note.updatedAt).toLocaleDateString()}
-                  </span>
-                </div>
-                <p>{note.content || "No content yet."}</p>
+                <article class="knowledge-item">
+                  <div class="knowledge-item-header">
+                    <strong>{note.title}</strong>
+                    <span class="status-pill">
+                      Updated {new Date(note.updatedAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <Show when={note.projectId}>
+                    <p class="knowledge-item-meta">Linked to a project</p>
+                  </Show>
+                  <p>{note.content || "No content yet."}</p>
                 <Show when={note.tags.length > 0}>
                   <div class="knowledge-item-tags">
                     <For each={note.tags}>{(tag) => <span class="knowledge-tag">{tag}</span>}</For>

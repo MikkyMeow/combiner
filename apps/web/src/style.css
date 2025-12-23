@@ -157,7 +157,7 @@ label {
 }
 
 .tasks-card {
-  width: min(960px, 98vw);
+  width: 100%;
   background: #ffffff;
   border-radius: 24px;
   padding: 1rem;
@@ -165,8 +165,28 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
-  max-width: 1110px;
+}
+
+.project-detail-layout {
+  width: min(1200px, 98vw);
   margin-inline: auto;
+}
+
+.project-detail-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+
+@media (max-width: 1024px) {
+  .project-detail-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.project-notes-card {
+  min-width: 0;
 }
 
 .task-form {

@@ -21,6 +21,16 @@ type Project = {
   updatedAt: string;
 };
 
+type Note = {
+  id: string;
+  title: string;
+  content: string;
+  tags: string[];
+  projectId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type ProjectPageProps = {
   projectId: string | null;
   jwtToken: string | null;
@@ -31,12 +41,17 @@ type ProjectPageProps = {
 const ProjectPage = (props: ProjectPageProps) => {
   const [project, setProject] = createSignal<Project | null>(null);
   const [tasks, setTasks] = createSignal<Task[]>([]);
+  const [notes, setNotes] = createSignal<Note[]>([]);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [creating, setCreating] = createSignal(false);
   const [editing, setEditing] = createSignal(false);
   const [newTitle, setNewTitle] = createSignal("");
   const [newDescription, setNewDescription] = createSignal("");
+  const [noteTitle, setNoteTitle] = createSignal("");
+  const [noteContent, setNoteContent] = createSignal("");
+  const [noteTags, setNoteTags] = createSignal("");
+  const [savingNote, setSavingNote] = createSignal(false);
   const [editingId, setEditingId] = createSignal<string | null>(null);
   const [editTitle, setEditTitle] = createSignal("");
   const [editDescription, setEditDescription] = createSignal("");
@@ -77,6 +92,12 @@ const ProjectPage = (props: ProjectPageProps) => {
     notify(message, "error");
   };
 
+  const parseTags = (input: string) =>
+    input
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter((tag) => tag.length > 0);
+
   const fetchProject = async (projectId: string) => {
     if (!props.jwtToken) {
       handleUnauthorized();
@@ -87,6 +108,7 @@ const ProjectPage = (props: ProjectPageProps) => {
     setError(null);
     setProject(null);
     setTasks([]);
+    setNotes([]);
 
     try {
       const response = await fetch(`${apiUrl()}/projects/${encodeURIComponent(projectId)}`, {
@@ -98,9 +120,10 @@ const ProjectPage = (props: ProjectPageProps) => {
         return;
       }
 
-      const data = (await response.json()) as { project: Project; tasks: Task[] };
+      const data = (await response.json()) as { project: Project; tasks: Task[]; notes?: Note[] };
       setProject(data.project);
       setTasks(data.tasks ?? []);
+      setNotes(data.notes ?? []);
     } catch (fetchError) {
       const message = (fetchError as Error).message || "Unable to load project data.";
       setError(message);
@@ -115,6 +138,7 @@ const ProjectPage = (props: ProjectPageProps) => {
     if (!projectId) {
       setProject(null);
       setTasks([]);
+      setNotes([]);
       setLoading(false);
       const message = "Project identifier is missing.";
       setError(message);
@@ -221,6 +245,63 @@ const ProjectPage = (props: ProjectPageProps) => {
     }
   };
 
+  const handleCreateNote = async (event: SubmitEvent) => {
+    event.preventDefault();
+    if (!props.jwtToken) {
+      handleUnauthorized();
+      return;
+    }
+
+    const title = noteTitle().trim();
+    if (!title) {
+      const message = "Note title is required.";
+      setError(message);
+      notify(message, "warning");
+      return;
+    }
+
+    const currentProject = project();
+    if (!currentProject) {
+      const message = "Project data is not available.";
+      setError(message);
+      notify(message, "warning");
+      return;
+    }
+
+    setSavingNote(true);
+    setError(null);
+    try {
+      const response = await fetch(`${apiUrl()}/notes`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({
+          title,
+          content: noteContent().trim(),
+          tags: parseTags(noteTags()),
+          projectId: currentProject.id
+        })
+      });
+
+      if (!response.ok) {
+        await handleFetchError(response);
+        return;
+      }
+
+      const created = (await response.json()) as Note;
+      setNotes((current) => [created, ...current]);
+      setNoteTitle("");
+      setNoteContent("");
+      setNoteTags("");
+      notify("Note saved to project", "success");
+    } catch (fetchError) {
+      const message = (fetchError as Error).message || "Unable to save note.";
+      setError(message);
+      notify(message, "error");
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
   const startEdit = (task: Task) => {
     setEditingId(task.id);
     setEditTitle(task.title);
@@ -286,159 +367,261 @@ const ProjectPage = (props: ProjectPageProps) => {
     }
   };
 
+  const handleDeleteNote = async (noteId: string) => {
+    if (!props.jwtToken) {
+      handleUnauthorized();
+      return;
+    }
+
+    try {
+      const response = await fetch(`${apiUrl()}/notes/${encodeURIComponent(noteId)}`, {
+        method: "DELETE",
+        headers: getHeaders()
+      });
+      if (!response.ok) {
+        await handleFetchError(response);
+        return;
+      }
+      setNotes((current) => current.filter((note) => note.id !== noteId));
+      notify("Note removed from project", "info");
+    } catch (fetchError) {
+      const message = (fetchError as Error).message || "Unable to remove note.";
+      setError(message);
+      notify(message, "error");
+    }
+  };
+
   const handleToggleCompleted = (task: Task) => {
     void updateTask(task.id, { completed: !task.completed }, "Task status saved");
   };
 
   return (
-    <section class="tasks-card">
-      <div class="project-detail-header">
-        {props.onNavigate && (
-          <button type="button" class="ghost" onClick={handleBack}>
-            Back to projects
-          </button>
-        )}
-        <div>
-          <h1>{project()?.title ?? "Project details"}</h1>
-          <p class="table-description">
-            {project()?.description || "No description provided."}
-          </p>
-        </div>
-      </div>
+    <section class="project-detail-layout">
+      <div class="project-detail-columns">
+        <section class="tasks-card">
+          <div class="project-detail-header">
+            {props.onNavigate && (
+              <button type="button" class="ghost" onClick={handleBack}>
+                Back to projects
+              </button>
+            )}
+            <div>
+              <h1>{project()?.title ?? "Project details"}</h1>
+              <p class="table-description">
+                {project()?.description || "No description provided."}
+              </p>
+            </div>
+          </div>
 
-      <form class="task-form" onSubmit={handleCreateTask}>
-        <label>
-          Title
-          <input
-            class="text-input"
-            value={newTitle()}
-            onInput={(event) => setNewTitle(event.currentTarget.value)}
-            placeholder="Task title"
-            required
-          />
-        </label>
-        <label>
-          Description (optional)
-          <textarea
-            class="text-input"
-            value={newDescription()}
-            onInput={(event) => setNewDescription(event.currentTarget.value)}
-            rows={3}
-            placeholder="Describe what needs to be done"
-          />
-        </label>
-        <button class="primary" type="submit" disabled={creating()}>
-          {creating() ? "Saving..." : "Add task"}
-        </button>
-      </form>
+          <form class="task-form" onSubmit={handleCreateTask}>
+            <label>
+              Title
+              <input
+                class="text-input"
+                value={newTitle()}
+                onInput={(event) => setNewTitle(event.currentTarget.value)}
+                placeholder="Task title"
+                required
+              />
+            </label>
+            <label>
+              Description (optional)
+              <textarea
+                class="text-input"
+                value={newDescription()}
+                onInput={(event) => setNewDescription(event.currentTarget.value)}
+                rows={3}
+                placeholder="Describe what needs to be done"
+              />
+            </label>
+            <button class="primary" type="submit" disabled={creating()}>
+              {creating() ? "Saving..." : "Add task"}
+            </button>
+          </form>
 
-      <Show when={editingId()}>
-        <div class="edit-modal-wrapper">
-          <section class="edit-panel">
-            <h2>Editing task</h2>
-            <form onSubmit={handleEditSubmit}>
+          <Show when={editingId()}>
+            <div class="edit-modal-wrapper">
+              <section class="edit-panel">
+                <h2>Editing task</h2>
+                <form onSubmit={handleEditSubmit}>
+                  <label>
+                    Title
+                    <input
+                      class="text-input"
+                      value={editTitle()}
+                      onInput={(event) => setEditTitle(event.currentTarget.value)}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Description
+                    <textarea
+                      class="text-input"
+                      rows={3}
+                      value={editDescription()}
+                      onInput={(event) => setEditDescription(event.currentTarget.value)}
+                    />
+                  </label>
+                  <div class="edit-actions">
+                    <button type="button" class="ghost" onClick={cancelEdit}>
+                      Cancel
+                    </button>
+                    <button class="primary" type="submit" disabled={editing()}>
+                      {editing() ? "Saving..." : "Save"}
+                    </button>
+                  </div>
+                </form>
+              </section>
+            </div>
+          </Show>
+
+          <Show when={error()}>
+            <p class="helper-text">{error()}</p>
+          </Show>
+
+          <Show when={loading()}>
+            <p class="helper-text">Loading project...</p>
+          </Show>
+
+          <Show when={!loading() && project()}>
+            <p class="helper-text">
+              {tasks().length} task{tasks().length === 1 ? "" : "s"} attached to this project.
+            </p>
+
+            <Show when={tasks().length === 0}>
+              <p class="helper-text">No tasks are linked to this project yet.</p>
+            </Show>
+
+            <Show when={tasks().length > 0}>
+              <div class="tasks-table-wrapper">
+                <table class="tasks-table">
+                  <thead>
+                    <tr>
+                      <th>Title &amp; description</th>
+                      <th>Status</th>
+                      <th>Updated</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <For each={tasks()}>
+                      {(task) => (
+                        <tr class={task.completed ? "completed" : ""}>
+                          <td>
+                            <strong>{task.title}</strong>
+                            <p class="table-description">
+                              {task.description || "No description provided."}
+                            </p>
+                          </td>
+                          <td>
+                            <span class={`status-pill ${task.completed ? "completed" : ""}`}>
+                              {task.completed ? "Completed" : "Pending"}
+                            </span>
+                          </td>
+                          <td>
+                            <span>Updated {new Date(task.updatedAt).toLocaleString()}</span>
+                          </td>
+                          <td>
+                            <div class="task-actions">
+                              <button
+                                type="button"
+                                class="ghost"
+                                onClick={() => handleToggleCompleted(task)}
+                              >
+                                {task.completed ? "Undo" : "Complete"}
+                              </button>
+                              <button type="button" class="ghost" onClick={() => startEdit(task)}>
+                                Edit
+                              </button>
+                              <button type="button" class="ghost" onClick={() => handleDelete(task.id)}>
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </For>
+                  </tbody>
+                </table>
+              </div>
+            </Show>
+          </Show>
+        </section>
+
+        <Show when={!loading() && project()}>
+          <article class="knowledge-panel project-notes-card">
+            <h2>Project notes</h2>
+            <p class="helper-text">
+              Capture quick guidance, insights, or reminders that live alongside this project.
+            </p>
+
+            <form class="knowledge-form" onSubmit={handleCreateNote}>
               <label>
                 Title
                 <input
                   class="text-input"
-                  value={editTitle()}
-                  onInput={(event) => setEditTitle(event.currentTarget.value)}
+                  value={noteTitle()}
+                  onInput={(event) => setNoteTitle(event.currentTarget.value)}
+                  placeholder="Note title"
                   required
                 />
               </label>
               <label>
-                Description
+                Content
                 <textarea
-                  class="text-input"
-                  rows={3}
-                  value={editDescription()}
-                  onInput={(event) => setEditDescription(event.currentTarget.value)}
+                  class="text-input knowledge-textarea"
+                  value={noteContent()}
+                  onInput={(event) => setNoteContent(event.currentTarget.value)}
+                  placeholder="Details or context for this note"
                 />
               </label>
-              <div class="edit-actions">
-                <button type="button" class="ghost" onClick={cancelEdit}>
-                  Cancel
-                </button>
-                <button class="primary" type="submit" disabled={editing()}>
-                  {editing() ? "Saving..." : "Save"}
-                </button>
-              </div>
+              <label>
+                Tags (comma separated)
+                <input
+                  class="text-input"
+                  value={noteTags()}
+                  onInput={(event) => setNoteTags(event.currentTarget.value)}
+                />
+              </label>
+              <button class="primary" type="submit" disabled={savingNote()}>
+                {savingNote() ? "Saving..." : "Save note"}
+              </button>
             </form>
-          </section>
-        </div>
-      </Show>
 
-      <Show when={error()}>
-        <p class="helper-text">{error()}</p>
-      </Show>
+            <Show when={notes().length === 0}>
+              <p class="helper-text">No notes attached to this project yet.</p>
+            </Show>
 
-      <Show when={loading()}>
-        <p class="helper-text">Loading project...</p>
-      </Show>
-
-      <Show when={!loading() && project()}>
-        <p class="helper-text">
-          {tasks().length} task{tasks().length === 1 ? "" : "s"} attached to this project.
-        </p>
-
-        <Show when={tasks().length === 0}>
-          <p class="helper-text">No tasks are linked to this project yet.</p>
-        </Show>
-
-        <Show when={tasks().length > 0}>
-          <div class="tasks-table-wrapper">
-            <table class="tasks-table">
-              <thead>
-                <tr>
-                  <th>Title &amp; description</th>
-                  <th>Status</th>
-                  <th>Updated</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                <For each={tasks()}>
-                  {(task) => (
-                    <tr class={task.completed ? "completed" : ""}>
-                      <td>
-                        <strong>{task.title}</strong>
-                        <p class="table-description">
-                          {task.description || "No description provided."}
-                        </p>
-                      </td>
-                      <td>
-                        <span class={`status-pill ${task.completed ? "completed" : ""}`}>
-                          {task.completed ? "Completed" : "Pending"}
+            <Show when={notes().length > 0}>
+              <div class="knowledge-list">
+                <For each={notes()}>
+                  {(note) => (
+                    <article class="knowledge-item">
+                      <div class="knowledge-item-header">
+                        <strong>{note.title}</strong>
+                        <span class="status-pill">
+                          Updated {new Date(note.updatedAt).toLocaleDateString()}
                         </span>
-                      </td>
-                      <td>
-                        <span>Updated {new Date(task.updatedAt).toLocaleString()}</span>
-                      </td>
-                      <td>
-                        <div class="task-actions">
-                          <button
-                            type="button"
-                            class="ghost"
-                            onClick={() => handleToggleCompleted(task)}
-                          >
-                            {task.completed ? "Undo" : "Complete"}
-                          </button>
-                          <button type="button" class="ghost" onClick={() => startEdit(task)}>
-                            Edit
-                          </button>
-                          <button type="button" class="ghost" onClick={() => handleDelete(task.id)}>
-                            Delete
-                          </button>
+                      </div>
+                      <p>{note.content || "No content yet."}</p>
+                      <Show when={note.tags.length > 0}>
+                        <div class="knowledge-item-tags">
+                          <For each={note.tags}>{(tag) => <span class="knowledge-tag">{tag}</span>}</For>
                         </div>
-                      </td>
-                    </tr>
+                      </Show>
+                      <div class="knowledge-actions">
+                        <button class="ghost" type="button" onClick={() => handleDeleteNote(note.id)}>
+                          Delete
+                        </button>
+                      </div>
+                    </article>
                   )}
                 </For>
-              </tbody>
-            </table>
-          </div>
+              </div>
+            </Show>
+          </article>
         </Show>
-      </Show>
+      </div>
     </section>
   );
 };

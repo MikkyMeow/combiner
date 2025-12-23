@@ -9,6 +9,7 @@ import {
   updateProject
 } from "./projectsStore";
 import { findTasksForProject } from "./tasksStore";
+import { findNotesForProject } from "./notesStore";
 
 type ProjectCreateBody = {
   title: string;
@@ -55,7 +56,8 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
       }
 
       const tasks = findTasksForProject(username, project.id);
-      return { project, tasks };
+      const notes = findNotesForProject(username, project.id);
+      return { project, tasks, notes };
     }
   );
 

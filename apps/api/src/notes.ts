@@ -13,6 +13,7 @@ type NoteCreateBody = {
   title: string;
   content?: string;
   tags?: string[];
+  projectId?: string | null;
 };
 
 type NoteUpdateBody = Partial<NoteCreateBody>;
@@ -21,6 +22,14 @@ const sanitizeTags = (tags?: string[]): string[] =>
   (tags ?? [])
     .map((tag) => tag.trim())
     .filter((tag) => tag.length > 0);
+
+const normalizeProjectId = (value?: string | null): string | null => {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
 
 const notesRoutes: FastifyPluginAsync = async (server) => {
   const ensureAuthenticated = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -80,6 +89,7 @@ const notesRoutes: FastifyPluginAsync = async (server) => {
         title: trimmedTitle,
         content: request.body.content ?? "",
         tags: sanitizeTags(request.body.tags),
+        projectId: normalizeProjectId(request.body.projectId),
         createdAt: now,
         updatedAt: now
       };
@@ -116,6 +126,10 @@ const notesRoutes: FastifyPluginAsync = async (server) => {
 
       if (request.body.tags !== undefined) {
         updates.tags = sanitizeTags(request.body.tags);
+      }
+
+      if (request.body.projectId !== undefined) {
+        updates.projectId = normalizeProjectId(request.body.projectId);
       }
 
       const updatedNote = updateNote(username, target.id, updates);
