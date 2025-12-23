@@ -11,12 +11,28 @@ import { getRoutes } from "./routes";
 import NotificationStack from "./components/notifications/NotificationStack";
 import { useNotifications } from "./components/notifications/useNotifications";
 
+const themeKey = "combiner-theme";
+const getStoredTheme = (): "dark" | "light" => {
+  if (typeof window === "undefined") {
+    return "dark";
+  }
+  const stored = localStorage.getItem(themeKey);
+  if (stored === "light" || stored === "dark") {
+    return stored;
+  }
+  if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+    return "dark";
+  }
+  return "light";
+};
+
 const initialToken =
   typeof window !== "undefined" ? localStorage.getItem("jwtToken") : null;
 
 const App = () => {
   const [page, setPage] = createSignal(window.location.pathname || "/");
   const [jwtToken, setJwtToken] = createSignal<string | null>(initialToken ?? null);
+  const [theme, setTheme] = createSignal<"dark" | "light">(getStoredTheme());
   const { notifications, enqueueNotification, dismissNotification } = useNotifications();
 
   const scrollKey = (path: string) => `scroll-position:${path}`;
@@ -77,6 +93,20 @@ const App = () => {
     setJwtToken(null);
     localStorage.removeItem("jwtToken");
     navigate("/login");
+  };
+  const applyThemePreference = (value: "dark" | "light") => {
+    if (typeof document !== "undefined") {
+      document.documentElement.dataset.theme = value;
+    }
+    if (typeof window !== "undefined") {
+      localStorage.setItem(themeKey, value);
+    }
+  };
+  createEffect(() => {
+    applyThemePreference(theme());
+  });
+  const toggleTheme = () => {
+    setTheme((value) => (value === "dark" ? "light" : "dark"));
   };
 
   const isProjectDetailPath = (path: string) =>
@@ -210,21 +240,31 @@ const App = () => {
     <div class="app-shell">
       <nav class="top-nav">
         <h1 class="site-title">Combiner Auth</h1>
-        <div class="nav-actions">
-          {routes().map((route) => (
-            <button
-              type="button"
-              class="nav-link"
-              onClick={() => navigate(route.path)}
-            >
-              {route.label}
-            </button>
-          ))}
-          {jwtToken() && (
-            <button type="button" class="nav-link" onClick={handleLogout}>
-              Logout
-            </button>
-          )}
+        <div class="nav-controls">
+          <div class="nav-actions">
+            {routes().map((route) => (
+              <button
+                type="button"
+                class="nav-link"
+                onClick={() => navigate(route.path)}
+              >
+                {route.label}
+              </button>
+            ))}
+            {jwtToken() && (
+              <button type="button" class="nav-link" onClick={handleLogout}>
+                Logout
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            class="theme-toggle"
+            onClick={toggleTheme}
+            aria-label="Toggle color theme"
+          >
+            {theme() === "dark" ? "Light mode" : "Dark mode"}
+          </button>
         </div>
       </nav>
       <div class="content">{renderPage()}</div>
