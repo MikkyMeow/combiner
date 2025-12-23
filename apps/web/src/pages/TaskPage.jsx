@@ -165,7 +165,7 @@ const TaskPage = (props) => {
                 props.onNavigate(`/projects/${encodeURIComponent(projectId)}`);
                 return;
             }
-            props.onNavigate("/tasks");
+            props.onNavigate("/projects");
             return;
         }
         if (typeof window !== "undefined") {

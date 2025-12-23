@@ -4,8 +4,6 @@ const guestRoutes = [
 ];
 const authenticatedRoutes = [
     { path: "/profile", label: "Profile" },
-    { path: "/tasks", label: "Tasks" },
-    { path: "/notes", label: "Notes" },
     { path: "/projects", label: "Projects" }
 ];
 export const getRoutes = (authenticated) => authenticated ? authenticatedRoutes : guestRoutes;

@@ -2,8 +2,6 @@ import { createSignal, createEffect, createMemo, onCleanup, onMount } from "soli
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import ProfilePage from "./pages/ProfilePage";
-import TasksPage from "./pages/TasksPage";
-import NotesPage from "./pages/NotesPage";
 import ProjectsPage from "./pages/ProjectsPage";
 import ProjectPage from "./pages/ProjectPage";
 import TaskPage from "./pages/TaskPage";
@@ -75,7 +73,7 @@ const App = () => {
     };
     const onAuthenticated = (token) => {
         setJwtToken(token);
-        navigate("/tasks");
+        navigate("/projects");
     };
     const handleLogout = () => {
         setJwtToken(null);
@@ -115,7 +113,7 @@ const App = () => {
             if (!available.includes(currentPath) &&
                 !isProjectDetailPath(currentPath) &&
                 !isTaskDetailPath(currentPath)) {
-                navigate("/tasks");
+                navigate("/projects");
             }
         }
     });
@@ -161,10 +159,6 @@ const App = () => {
                     }} onNotify={enqueueNotification}/>);
             case "/profile":
                 return (<ProfilePage jwtToken={jwtToken()} onNotify={enqueueNotification}/>);
-            case "/tasks":
-                return (<TasksPage jwtToken={jwtToken()} onNotify={enqueueNotification}/>);
-            case "/notes":
-                return (<NotesPage jwtToken={jwtToken()} onNotify={enqueueNotification}/>);
             case "/projects":
                 return (<ProjectsPage jwtToken={jwtToken()} onNotify={enqueueNotification} onNavigate={navigate}/>);
             default:

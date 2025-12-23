@@ -10,8 +10,6 @@ const guestRoutes: RouteDefinition[] = [
 
 const authenticatedRoutes: RouteDefinition[] = [
   { path: "/profile", label: "Profile" },
-  { path: "/tasks", label: "Tasks" },
-  { path: "/notes", label: "Notes" },
   { path: "/projects", label: "Projects" }
 ];
 
