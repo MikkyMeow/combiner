@@ -5,6 +5,7 @@ import TasksPage from "./pages/TasksPage";
 import NotesPage from "./pages/NotesPage";
 import ProjectsPage from "./pages/ProjectsPage";
 import ProjectPage from "./pages/ProjectPage";
+import TaskPage from "./pages/TaskPage";
 import { getRoutes } from "./routes";
 import NotificationStack from "./components/notifications/NotificationStack";
 import { useNotifications } from "./components/notifications/useNotifications";
@@ -79,6 +80,7 @@ const App = () => {
 
   const isProjectDetailPath = (path: string) =>
     /^\/projects\/[^/]+$/.test(path);
+  const isTaskDetailPath = (path: string) => /^\/tasks\/[^/]+$/.test(path);
 
   onMount(() => {
     const handleUnload = () => saveScroll(page());
@@ -95,7 +97,11 @@ const App = () => {
     if (initialToken) {
       const currentPath = page();
       const available = routes().map((route) => route.path);
-      if (!available.includes(currentPath) && !isProjectDetailPath(currentPath)) {
+      if (
+        !available.includes(currentPath) &&
+        !isProjectDetailPath(currentPath) &&
+        !isTaskDetailPath(currentPath)
+      ) {
         navigate("/tasks");
       }
     }
@@ -107,7 +113,11 @@ const App = () => {
     const available = routes().map((route) => route.path);
     if (available.length === 0) return;
     const currentPath = page();
-    if (!available.includes(currentPath) && !isProjectDetailPath(currentPath)) {
+    if (
+      !available.includes(currentPath) &&
+      !isProjectDetailPath(currentPath) &&
+      !isTaskDetailPath(currentPath)
+    ) {
       navigate(available[0]);
     }
   });
@@ -122,9 +132,22 @@ const App = () => {
   });
 
   const renderPage = () => {
-    const match = page().match(/^\/projects\/([^/]+)$/);
-    if (match) {
-      const projectId = decodeURIComponent(match[1]);
+    const taskMatch = page().match(/^\/tasks\/([^/]+)$/);
+    if (taskMatch) {
+      const taskId = decodeURIComponent(taskMatch[1]);
+      return (
+        <TaskPage
+          taskId={taskId}
+          jwtToken={jwtToken()}
+          onNotify={enqueueNotification}
+          onNavigate={navigate}
+        />
+      );
+    }
+
+    const projectMatch = page().match(/^\/projects\/([^/]+)$/);
+    if (projectMatch) {
+      const projectId = decodeURIComponent(projectMatch[1]);
       return (
         <ProjectPage
           projectId={projectId}
