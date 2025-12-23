@@ -35,16 +35,28 @@ export type TaskRow = {
   updatedAt: string;
 };
 
+export type NoteRow = {
+  id: string;
+  username: string;
+  title: string;
+  content: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type DatabaseState = {
   users: UserRow[];
   projects: ProjectRow[];
   tasks: TaskRow[];
+  notes: NoteRow[];
 };
 
 const initialState: DatabaseState = {
   users: [],
   projects: [],
-  tasks: []
+  tasks: [],
+  notes: []
 };
 
 const ensureDatabase = () => {
@@ -53,10 +65,22 @@ const ensureDatabase = () => {
   }
 };
 
+const normalizeState = (payload: Partial<DatabaseState>): DatabaseState => ({
+  users: payload.users ?? [],
+  projects: payload.projects ?? [],
+  tasks: payload.tasks ?? [],
+  notes: payload.notes ?? []
+});
+
 export const loadDatabase = (): DatabaseState => {
   ensureDatabase();
   const raw = fs.readFileSync(databasePath, "utf8");
-  return JSON.parse(raw) as DatabaseState;
+  const parsed = JSON.parse(raw) as Partial<DatabaseState>;
+  const normalized = normalizeState(parsed);
+  if (parsed.notes === undefined) {
+    saveDatabase(normalized);
+  }
+  return normalized;
 };
 
 export const saveDatabase = (state: DatabaseState): void => {

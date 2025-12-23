@@ -4,13 +4,14 @@ export type RouteDefinition = {
 };
 
 const guestRoutes: RouteDefinition[] = [
-  { path: "/login", label: "Логин" },
-  { path: "/register", label: "Регистрация" }
+  { path: "/login", label: "Login" },
+  { path: "/register", label: "Register" }
 ];
 
 const authenticatedRoutes: RouteDefinition[] = [
-  { path: "/tasks", label: "Задачи" },
-  { path: "/projects", label: "Проекты" }
+  { path: "/tasks", label: "Tasks" },
+  { path: "/notes", label: "Notes" },
+  { path: "/projects", label: "Projects" }
 ];
 
 export const getRoutes = (authenticated: boolean): RouteDefinition[] =>

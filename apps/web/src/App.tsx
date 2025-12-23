@@ -2,6 +2,7 @@ import { createSignal, createEffect, createMemo, onCleanup, onMount } from "soli
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import TasksPage from "./pages/TasksPage";
+import NotesPage from "./pages/NotesPage";
 import ProjectsPage from "./pages/ProjectsPage";
 import ProjectPage from "./pages/ProjectPage";
 import { getRoutes } from "./routes";
@@ -154,6 +155,13 @@ const App = () => {
             onNotify={enqueueNotification}
           />
         );
+      case "/notes":
+        return (
+          <NotesPage
+            jwtToken={jwtToken()}
+            onNotify={enqueueNotification}
+          />
+        );
       case "/projects":
         return (
           <ProjectsPage
@@ -183,7 +191,7 @@ const App = () => {
           ))}
           {jwtToken() && (
             <button type="button" class="nav-link" onClick={handleLogout}>
-              Выйти
+              Logout
             </button>
           )}
         </div>

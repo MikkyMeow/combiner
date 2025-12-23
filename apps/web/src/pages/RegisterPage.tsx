@@ -20,13 +20,12 @@ const RegisterPage = ({ onSuccess, onNotify }: RegisterPageProps) => {
   };
 
   const passwordsMatch = () => password() === confirmPassword();
-  const showPasswordMismatch = () =>
-    confirmPassword().length > 0 && !passwordsMatch();
+  const showPasswordMismatch = () => confirmPassword().length > 0 && !passwordsMatch();
 
   const handleRegister = async (event: SubmitEvent) => {
     event.preventDefault();
+    const mismatchMessage = "Passwords do not match.";
     if (!passwordsMatch()) {
-      const mismatchMessage = "Пароли не совпадают.";
       setResult(mismatchMessage);
       notify(mismatchMessage, "error");
       return;
@@ -45,7 +44,6 @@ const RegisterPage = ({ onSuccess, onNotify }: RegisterPageProps) => {
       });
 
       const data = await response.json();
-
       if (!response.ok) {
         const errorMessage = data.message ?? "Registration failed. Please try again.";
         setResult(errorMessage);
@@ -68,9 +66,9 @@ const RegisterPage = ({ onSuccess, onNotify }: RegisterPageProps) => {
 
   return (
     <form class="form-panel" onSubmit={handleRegister}>
-      <h2>Создать аккаунт</h2>
+      <h2>Create an account</h2>
       <label>
-        Имя пользователя
+        Username
         <input
           class="text-input"
           value={username()}
@@ -79,7 +77,7 @@ const RegisterPage = ({ onSuccess, onNotify }: RegisterPageProps) => {
         />
       </label>
       <label>
-        Пароль
+        Password
         <input
           class="text-input"
           type="password"
@@ -89,7 +87,7 @@ const RegisterPage = ({ onSuccess, onNotify }: RegisterPageProps) => {
         />
       </label>
       <label>
-        Повторите пароль
+        Confirm password
         <input
           class="text-input"
           type="password"
@@ -98,11 +96,11 @@ const RegisterPage = ({ onSuccess, onNotify }: RegisterPageProps) => {
           required
         />
         {showPasswordMismatch() && (
-          <p class="helper-text">Пароли не совпадают.</p>
+          <p class="helper-text">Passwords do not match.</p>
         )}
       </label>
       <button class="primary" type="submit" disabled={loading() || !passwordsMatch()}>
-        {loading() ? "Отправка..." : "Зарегистрироваться"}
+        {loading() ? "Creating account..." : "Register"}
       </button>
       {result() && <p class="helper-text">{result()}</p>}
     </form>

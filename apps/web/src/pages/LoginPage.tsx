@@ -30,19 +30,18 @@ const LoginPage = ({ onAuthenticated }: LoginPageProps) => {
       });
 
       const data = await response.json();
-
       if (!response.ok) {
-        setResult(data.message ?? "Не удалось выполнить вход");
+        setResult(data.message ?? "Unable to log in. Please check your credentials.");
         return;
       }
 
       if (!data.token) {
-        setResult("Токен не получен");
+        setResult("Token not received from server.");
         return;
       }
 
       setToken(data.token);
-      setResult("Вход выполнен, токен получен");
+      setResult("Login successful.");
       onAuthenticated(data.token);
 
       const profileResponse = await fetch(`${apiUrl()}/me`, {
@@ -52,7 +51,7 @@ const LoginPage = ({ onAuthenticated }: LoginPageProps) => {
       });
 
       if (!profileResponse.ok) {
-        setProfileInfo("Не удалось получить профиль");
+        setProfileInfo("Unable to load profile information.");
         return;
       }
 
@@ -67,9 +66,9 @@ const LoginPage = ({ onAuthenticated }: LoginPageProps) => {
 
   return (
     <form class="form-panel" onSubmit={handleLogin}>
-      <h2>Вход</h2>
+      <h2>Login</h2>
       <label>
-        Имя пользователя
+        Username
         <input
           class="text-input"
           value={username()}
@@ -78,7 +77,7 @@ const LoginPage = ({ onAuthenticated }: LoginPageProps) => {
         />
       </label>
       <label>
-        Пароль
+        Password
         <input
           class="text-input"
           type="password"
@@ -88,13 +87,13 @@ const LoginPage = ({ onAuthenticated }: LoginPageProps) => {
         />
       </label>
       <button class="primary" type="submit" disabled={loading()}>
-        {loading() ? "Отправка…" : "Войти"}
+        {loading() ? "Logging in..." : "Log in"}
       </button>
       {result() && <p class="helper-text">{result()}</p>}
       {token() && <p class="helper-text">JWT: {token()}</p>}
       {profileInfo() && (
         <div class="profile-card">
-          <strong>Профиль:</strong>
+          <strong>Profile:</strong>
           <pre>{profileInfo()}</pre>
         </div>
       )}
