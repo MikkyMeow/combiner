@@ -48,7 +48,6 @@ const ProjectPage = (props: ProjectPageProps) => {
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [creating, setCreating] = createSignal(false);
-  const [editing, setEditing] = createSignal(false);
   const [newTitle, setNewTitle] = createSignal("");
   const [newDescription, setNewDescription] = createSignal("");
   const [noteTitle, setNoteTitle] = createSignal("");
@@ -57,9 +56,6 @@ const ProjectPage = (props: ProjectPageProps) => {
   const [savingNote, setSavingNote] = createSignal(false);
   const [memberUsername, setMemberUsername] = createSignal("");
   const [invitingMember, setInvitingMember] = createSignal(false);
-  const [editingId, setEditingId] = createSignal<string | null>(null);
-  const [editTitle, setEditTitle] = createSignal("");
-  const [editDescription, setEditDescription] = createSignal("");
 
   const notify = (message: string, type: NotificationType = "info") => {
     props.onNotify?.(message, type);
@@ -356,44 +352,6 @@ const ProjectPage = (props: ProjectPageProps) => {
     }
   };
 
-  const startEdit = (task: Task) => {
-    setEditingId(task.id);
-    setEditTitle(task.title);
-    setEditDescription(task.description);
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-  };
-
-  const handleEditSubmit = async (event: SubmitEvent) => {
-    event.preventDefault();
-    const id = editingId();
-    if (!id) return;
-
-    const title = editTitle().trim();
-    if (!title) {
-      const message = "Task title cannot be empty.";
-      setError(message);
-      notify(message, "warning");
-      return;
-    }
-
-    setEditing(true);
-    try {
-      const updatedTask = await updateTask(
-        id,
-        { title, description: editDescription().trim() },
-        "Task updated"
-      );
-
-      if (updatedTask) {
-        setEditingId(null);
-      }
-    } finally {
-      setEditing(false);
-    }
-  };
 
   const handleDelete = async (id: string) => {
     if (!props.jwtToken) {
@@ -447,6 +405,10 @@ const ProjectPage = (props: ProjectPageProps) => {
 
   const handleToggleCompleted = (task: Task) => {
     void updateTask(task.id, { completed: !task.completed }, "Task status saved");
+  };
+
+  const viewTaskDetail = (task: Task) => {
+    props.onNavigate?.(`/tasks/${encodeURIComponent(task.id)}`);
   };
 
   return (
@@ -527,42 +489,6 @@ const ProjectPage = (props: ProjectPageProps) => {
             </button>
           </form>
 
-          <Show when={editingId()}>
-            <div class="edit-modal-wrapper">
-              <section class="edit-panel">
-                <h2>Editing task</h2>
-                <form onSubmit={handleEditSubmit}>
-                  <label>
-                    Title
-                    <input
-                      class="text-input"
-                      value={editTitle()}
-                      onInput={(event) => setEditTitle(event.currentTarget.value)}
-                      required
-                    />
-                  </label>
-                  <label>
-                    Description
-                    <textarea
-                      class="text-input"
-                      rows={3}
-                      value={editDescription()}
-                      onInput={(event) => setEditDescription(event.currentTarget.value)}
-                    />
-                  </label>
-                  <div class="edit-actions">
-                    <button type="button" class="ghost" onClick={cancelEdit}>
-                      Cancel
-                    </button>
-                    <button class="primary" type="submit" disabled={editing()}>
-                      {editing() ? "Saving..." : "Save"}
-                    </button>
-                  </div>
-                </form>
-              </section>
-            </div>
-          </Show>
-
           <Show when={error()}>
             <p class="helper-text">{error()}</p>
           </Show>
@@ -618,8 +544,8 @@ const ProjectPage = (props: ProjectPageProps) => {
                               >
                                 {task.completed ? "Undo" : "Complete"}
                               </button>
-                              <button type="button" class="ghost" onClick={() => startEdit(task)}>
-                                Edit
+                              <button type="button" class="ghost" onClick={() => viewTaskDetail(task)}>
+                                View
                               </button>
                               <button type="button" class="ghost" onClick={() => handleDelete(task.id)}>
                                 Delete
