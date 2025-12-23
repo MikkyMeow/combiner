@@ -1,6 +1,13 @@
 import { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { randomUUID } from "crypto";
-import { ensureProjectList, findProjectById, type ProjectRecord } from "./projectsStore";
+import {
+  deleteProject,
+  findProjectById,
+  insertProject,
+  listProjects,
+  type ProjectRecord,
+  updateProject
+} from "./projectsStore";
 import { findTasksForProject } from "./tasksStore";
 
 type ProjectCreateBody = {
@@ -31,7 +38,7 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
     const username = requireUser(request, reply);
     if (!username) return;
 
-    const projects = ensureProjectList(username);
+    const projects = listProjects(username);
     return { projects };
   });
 
@@ -73,9 +80,7 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
         updatedAt: now
       };
 
-      const projects = ensureProjectList(username);
-      projects.unshift(newProject);
-      return newProject;
+      return insertProject(username, newProject);
     }
   );
 
@@ -86,27 +91,34 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
       const username = requireUser(request, reply);
       if (!username) return;
 
-      const projects = ensureProjectList(username);
-      const target = projects.find((project) => project.id === request.params.id);
+      const target = findProjectById(username, request.params.id);
       if (!target) {
         return reply.status(404).send({ message: "Project not found" });
       }
 
       const now = new Date().toISOString();
+      const updates: ProjectUpdateBody & { updatedAt: string } = {
+        updatedAt: now
+      };
+
       if (request.body.title !== undefined) {
         const trimmedTitle = request.body.title.trim();
         if (!trimmedTitle) {
           return reply.status(400).send({ message: "Title cannot be empty" });
         }
-        target.title = trimmedTitle;
+        updates.title = trimmedTitle;
       }
 
       if (request.body.description !== undefined) {
-        target.description = request.body.description.trim();
+        updates.description = request.body.description.trim();
       }
 
-      target.updatedAt = now;
-      return target;
+      const updated = updateProject(username, target.id, updates);
+      if (!updated) {
+        return reply.status(404).send({ message: "Project not found" });
+      }
+
+      return updated;
     }
   );
 
@@ -117,13 +129,11 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
       const username = requireUser(request, reply);
       if (!username) return;
 
-      const projects = ensureProjectList(username);
-      const index = projects.findIndex((project) => project.id === request.params.id);
-      if (index === -1) {
+      const deleted = deleteProject(username, request.params.id);
+      if (!deleted) {
         return reply.status(404).send({ message: "Project not found" });
       }
 
-      projects.splice(index, 1);
       return { message: "Project deleted" };
     }
   );

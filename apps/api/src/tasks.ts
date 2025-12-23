@@ -1,7 +1,14 @@
 import { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { randomUUID } from "crypto";
 import { findProjectById } from "./projectsStore";
-import { ensureTaskList, TaskRecord } from "./tasksStore";
+import {
+  deleteTask,
+  findTaskById,
+  insertTask,
+  listTasks,
+  type TaskRecord,
+  updateTask
+} from "./tasksStore";
 
 type TaskCreateBody = {
   title: string;
@@ -35,7 +42,7 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
     const username = requireUser(request, reply);
     if (!username) return;
 
-    const tasks = ensureTaskList(username);
+    const tasks = listTasks(username);
     return { tasks };
   });
 
@@ -74,9 +81,7 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
         updatedAt: now
       };
 
-      const tasks = ensureTaskList(username);
-      tasks.unshift(newTask);
-      return newTask;
+      return insertTask(username, newTask);
     }
   );
 
@@ -87,44 +92,49 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
       const username = requireUser(request, reply);
       if (!username) return;
 
-      const tasks = ensureTaskList(username);
-      const target = tasks.find((task) => task.id === request.params.id);
+      const target = findTaskById(username, request.params.id);
       if (!target) {
         return reply.status(404).send({ message: "Task not found" });
       }
 
       const now = new Date().toISOString();
+      const updates: TaskUpdateBody & { updatedAt: string } = { updatedAt: now };
+
       if (request.body.title !== undefined) {
         const trimmedTitle = request.body.title.trim();
         if (!trimmedTitle) {
           return reply.status(400).send({ message: "Title cannot be empty" });
         }
-        target.title = trimmedTitle;
+        updates.title = trimmedTitle;
       }
 
       if (request.body.description !== undefined) {
-        target.description = request.body.description.trim();
+        updates.description = request.body.description.trim();
       }
 
       if (typeof request.body.completed === "boolean") {
-        target.completed = request.body.completed;
+        updates.completed = request.body.completed;
       }
 
       if (request.body.projectId !== undefined) {
         const trimmedProjectId = request.body.projectId?.trim() ?? "";
         if (!trimmedProjectId) {
-          target.projectId = null;
+          updates.projectId = null;
         } else {
           const project = findProjectById(username, trimmedProjectId);
           if (!project) {
             return reply.status(400).send({ message: "Project not found" });
           }
-          target.projectId = trimmedProjectId;
+          updates.projectId = trimmedProjectId;
         }
       }
 
-      target.updatedAt = now;
-      return target;
+      const updated = updateTask(username, target.id, updates);
+      if (!updated) {
+        return reply.status(404).send({ message: "Task not found" });
+      }
+
+      return updated;
     }
   );
 
@@ -135,13 +145,11 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
       const username = requireUser(request, reply);
       if (!username) return;
 
-      const tasks = ensureTaskList(username);
-      const index = tasks.findIndex((task) => task.id === request.params.id);
-      if (index === -1) {
+      const deleted = deleteTask(username, request.params.id);
+      if (!deleted) {
         return reply.status(404).send({ message: "Task not found" });
       }
 
-      tasks.splice(index, 1);
       return { message: "Task deleted" };
     }
   );

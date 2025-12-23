@@ -1,3 +1,4 @@
+import "./db";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import authRoutes from "./auth";

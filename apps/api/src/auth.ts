@@ -1,8 +1,7 @@
 import { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import fastifyJwt, { FastifyJWTOptions } from "@fastify/jwt";
 import fastifyPlugin from "fastify-plugin";
-
-type UserRecord = { password: string };
+import { createUser, findUserByUsername } from "./usersStore";
 
 interface RegisterBody {
   username: string;
@@ -25,8 +24,6 @@ declare module "fastify" {
     authenticate(request: FastifyRequest, reply: FastifyReply): Promise<void>;
   }
 }
-
-const users = new Map<string, UserRecord>();
 const jwtSecret = process.env.JWT_SECRET ?? "dev-secret";
 const jwtOptions: FastifyJWTOptions = {
   secret: jwtSecret,
@@ -47,17 +44,23 @@ const authRoutes: FastifyPluginAsync = async (server) => {
       return reply.status(400).send({ message: "Username and password are required" });
     }
 
-    if (users.has(username)) {
+    if (findUserByUsername(username)) {
       return reply.status(409).send({ message: "User already exists" });
     }
 
-    users.set(username, { password });
+    const now = new Date().toISOString();
+    createUser({
+      username,
+      password,
+      createdAt: now,
+      updatedAt: now
+    });
     return { message: "User registered" };
   });
 
   server.post<{ Body: RegisterBody }>("/login", async (request, reply) => {
     const { username, password } = request.body;
-    const user = users.get(username);
+    const user = findUserByUsername(username);
 
     if (!user || user.password !== password) {
       return reply.status(401).send({ message: "Invalid credentials" });

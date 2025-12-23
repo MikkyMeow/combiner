@@ -3,3 +3,4 @@ pnpm-lock.yaml
 dist/
 .env*
 *.log
+apps/api/data/
