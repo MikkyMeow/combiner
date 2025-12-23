@@ -189,6 +189,38 @@ label {
   min-width: 0;
 }
 
+.project-member-panel {
+  background: #f8fafc;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 20px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.project-member-panel .member-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.75rem;
+  border-radius: 999px;
+  background: #e0e7ff;
+  color: #4338ca;
+  font-size: 0.8rem;
+  margin-left: 0.4rem;
+}
+
+.project-member-panel .member-empty {
+  margin-left: 0.25rem;
+  color: #64748b;
+}
+
+.member-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
 .task-form {
   display: flex;
   flex-direction: column;

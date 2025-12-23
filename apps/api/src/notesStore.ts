@@ -1,4 +1,5 @@
 import { loadDatabase, saveDatabase, type NoteRow } from "./db";
+export type { NoteRow } from "./db";
 
 export type NoteRecord = {
   id: string;
@@ -20,6 +21,8 @@ const mapRow = (row: NoteRow): NoteRecord => ({
   updatedAt: row.updatedAt
 });
 
+export const mapNoteRow = (row: NoteRow): NoteRecord => mapRow(row);
+
 export const listNotes = (username: string): NoteRecord[] => {
   const state = loadDatabase();
   return state.notes
@@ -28,18 +31,17 @@ export const listNotes = (username: string): NoteRecord[] => {
     .map(mapRow);
 };
 
-export const findNotesForProject = (username: string, projectId: string): NoteRecord[] => {
+export const findNotesForProject = (projectId: string): NoteRecord[] => {
   const state = loadDatabase();
   return state.notes
-    .filter((note) => note.username === username && note.projectId === projectId)
+    .filter((note) => note.projectId === projectId)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     .map(mapRow);
 };
 
-export const findNoteById = (username: string, noteId: string): NoteRecord | null => {
+export const findNoteRowById = (noteId: string): NoteRow | null => {
   const state = loadDatabase();
-  const note = state.notes.find((entry) => entry.username === username && entry.id === noteId);
-  return note ? mapRow(note) : null;
+  return state.notes.find((entry) => entry.id === noteId) ?? null;
 };
 
 export const insertNote = (username: string, note: NoteRecord): NoteRecord => {
@@ -60,13 +62,9 @@ type NoteUpdatePayload = {
   updatedAt: string;
 };
 
-export const updateNote = (
-  username: string,
-  noteId: string,
-  payload: NoteUpdatePayload
-): NoteRecord | null => {
+export const updateNote = (noteId: string, payload: NoteUpdatePayload): NoteRecord | null => {
   const state = loadDatabase();
-  const target = state.notes.find((entry) => entry.username === username && entry.id === noteId);
+  const target = state.notes.find((entry) => entry.id === noteId);
   if (!target) {
     return null;
   }
@@ -92,10 +90,10 @@ export const updateNote = (
   return mapRow(target);
 };
 
-export const deleteNote = (username: string, noteId: string): boolean => {
+export const deleteNote = (noteId: string): boolean => {
   const state = loadDatabase();
   const existingCount = state.notes.length;
-  state.notes = state.notes.filter((entry) => !(entry.username === username && entry.id === noteId));
+  state.notes = state.notes.filter((entry) => entry.id !== noteId);
   if (state.notes.length === existingCount) {
     return false;
   }

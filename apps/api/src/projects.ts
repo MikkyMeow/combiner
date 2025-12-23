@@ -1,8 +1,10 @@
 import { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { randomUUID } from "crypto";
 import {
+  addProjectMember,
   deleteProject,
   findProjectById,
+  findProjectForUser,
   insertProject,
   listProjects,
   type ProjectRecord,
@@ -10,6 +12,7 @@ import {
 } from "./projectsStore";
 import { findTasksForProject } from "./tasksStore";
 import { findNotesForProject } from "./notesStore";
+import { findUserByUsername } from "./usersStore";
 
 type ProjectCreateBody = {
   title: string;
@@ -50,13 +53,13 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
       const username = requireUser(request, reply);
       if (!username) return;
 
-      const project = findProjectById(username, request.params.id);
+      const project = findProjectForUser(username, request.params.id);
       if (!project) {
         return reply.status(404).send({ message: "Project not found" });
       }
 
-      const tasks = findTasksForProject(username, project.id);
-      const notes = findNotesForProject(username, project.id);
+      const tasks = findTasksForProject(project.id);
+      const notes = findNotesForProject(project.id);
       return { project, tasks, notes };
     }
   );
@@ -79,7 +82,9 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
         title: trimmedTitle,
         description: request.body.description?.trim() ?? "",
         createdAt: now,
-        updatedAt: now
+        updatedAt: now,
+        owner: username,
+        members: []
       };
 
       return insertProject(username, newProject);
@@ -93,7 +98,7 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
       const username = requireUser(request, reply);
       if (!username) return;
 
-      const target = findProjectById(username, request.params.id);
+      const target = findProjectForUser(username, request.params.id);
       if (!target) {
         return reply.status(404).send({ message: "Project not found" });
       }
@@ -115,12 +120,51 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
         updates.description = request.body.description.trim();
       }
 
-      const updated = updateProject(username, target.id, updates);
+      const updated = updateProject(target.id, updates);
       if (!updated) {
         return reply.status(404).send({ message: "Project not found" });
       }
 
       return updated;
+    }
+  );
+
+  server.post<{ Params: { id: string }; Body: { username: string } }>(
+    "/projects/:id/members",
+    { preValidation: [ensureAuthenticated] },
+    async (request, reply) => {
+      const username = requireUser(request, reply);
+      if (!username) return;
+
+      const project = findProjectById(request.params.id);
+      if (!project) {
+        return reply.status(404).send({ message: "Project not found" });
+      }
+
+      if (project.owner !== username) {
+        return reply.status(403).send({ message: "Only the project owner can invite members" });
+      }
+
+      const invitee = request.body.username?.trim();
+      if (!invitee) {
+        return reply.status(400).send({ message: "Username is required" });
+      }
+
+      if (invitee === username) {
+        return reply.status(400).send({ message: "Cannot invite yourself" });
+      }
+
+      const user = findUserByUsername(invitee);
+      if (!user) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      const updated = addProjectMember(project.id, invitee);
+      if (!updated) {
+        return reply.status(404).send({ message: "Project not found" });
+      }
+
+      return { project: updated };
     }
   );
 
@@ -131,7 +175,11 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
       const username = requireUser(request, reply);
       if (!username) return;
 
-      const deleted = deleteProject(username, request.params.id);
+      const project = findProjectForUser(username, request.params.id);
+      if (!project || project.owner !== username) {
+        return reply.status(404).send({ message: "Project not found" });
+      }
+      const deleted = deleteProject(request.params.id);
       if (!deleted) {
         return reply.status(404).send({ message: "Project not found" });
       }

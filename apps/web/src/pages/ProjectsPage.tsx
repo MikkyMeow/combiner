@@ -9,6 +9,8 @@ type Project = {
   description: string;
   createdAt: string;
   updatedAt: string;
+  owner: string;
+  members: string[];
 };
 
 type ProjectsPageProps = {

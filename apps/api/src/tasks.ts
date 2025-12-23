@@ -1,9 +1,9 @@
 import { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { randomUUID } from "crypto";
-import { findProjectById } from "./projectsStore";
+import { findProjectForUser } from "./projectsStore";
 import {
   deleteTask,
-  findTaskById,
+  findTaskRowById,
   insertTask,
   listTasks,
   type TaskRecord,
@@ -62,7 +62,7 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
       if (request.body.projectId !== undefined) {
         const trimmedProjectId = request.body.projectId?.trim();
         if (trimmedProjectId) {
-          const project = findProjectById(username, trimmedProjectId);
+          const project = findProjectForUser(username, trimmedProjectId);
           if (!project) {
             return reply.status(400).send({ message: "Project not found" });
           }
@@ -77,6 +77,7 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
         description: request.body.description?.trim() ?? "",
         completed: false,
         projectId,
+        createdBy: username,
         createdAt: now,
         updatedAt: now
       };
@@ -92,8 +93,16 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
       const username = requireUser(request, reply);
       if (!username) return;
 
-      const target = findTaskById(username, request.params.id);
-      if (!target) {
+      const taskRow = findTaskRowById(request.params.id);
+      if (!taskRow) {
+        return reply.status(404).send({ message: "Task not found" });
+      }
+
+      const hasAccess =
+        taskRow.projectId !== null
+          ? !!findProjectForUser(username, taskRow.projectId)
+          : taskRow.username === username;
+      if (!hasAccess) {
         return reply.status(404).send({ message: "Task not found" });
       }
 
@@ -121,7 +130,7 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
         if (!trimmedProjectId) {
           updates.projectId = null;
         } else {
-          const project = findProjectById(username, trimmedProjectId);
+          const project = findProjectForUser(username, trimmedProjectId);
           if (!project) {
             return reply.status(400).send({ message: "Project not found" });
           }
@@ -129,7 +138,7 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
         }
       }
 
-      const updated = updateTask(username, target.id, updates);
+      const updated = updateTask(taskRow.id, updates);
       if (!updated) {
         return reply.status(404).send({ message: "Task not found" });
       }
@@ -145,7 +154,20 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
       const username = requireUser(request, reply);
       if (!username) return;
 
-      const deleted = deleteTask(username, request.params.id);
+      const taskRow = findTaskRowById(request.params.id);
+      if (!taskRow) {
+        return reply.status(404).send({ message: "Task not found" });
+      }
+
+      const hasAccess =
+        taskRow.projectId !== null
+          ? !!findProjectForUser(username, taskRow.projectId)
+          : taskRow.username === username;
+      if (!hasAccess) {
+        return reply.status(404).send({ message: "Task not found" });
+      }
+
+      const deleted = deleteTask(taskRow.id);
       if (!deleted) {
         return reply.status(404).send({ message: "Task not found" });
       }

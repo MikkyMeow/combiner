@@ -11,6 +11,7 @@ type Task = {
   createdAt: string;
   updatedAt: string;
   projectId: string | null;
+  createdBy: string;
 };
 
 type Project = {
@@ -19,6 +20,8 @@ type Project = {
   description: string;
   createdAt: string;
   updatedAt: string;
+  owner: string;
+  members: string[];
 };
 
 type Note = {
@@ -52,6 +55,8 @@ const ProjectPage = (props: ProjectPageProps) => {
   const [noteContent, setNoteContent] = createSignal("");
   const [noteTags, setNoteTags] = createSignal("");
   const [savingNote, setSavingNote] = createSignal(false);
+  const [memberUsername, setMemberUsername] = createSignal("");
+  const [invitingMember, setInvitingMember] = createSignal(false);
   const [editingId, setEditingId] = createSignal<string | null>(null);
   const [editTitle, setEditTitle] = createSignal("");
   const [editDescription, setEditDescription] = createSignal("");
@@ -245,6 +250,55 @@ const ProjectPage = (props: ProjectPageProps) => {
     }
   };
 
+  const handleInviteMember = async (event: SubmitEvent) => {
+    event.preventDefault();
+    if (!props.jwtToken) {
+      handleUnauthorized();
+      return;
+    }
+
+    const usernameToInvite = memberUsername().trim();
+    if (!usernameToInvite) {
+      const message = "Username is required to invite someone.";
+      setError(message);
+      notify(message, "warning");
+      return;
+    }
+
+    const projectId = project()?.id ?? props.projectId?.trim();
+    if (!projectId) {
+      const message = "Project identifier is missing.";
+      setError(message);
+      notify(message, "warning");
+      return;
+    }
+
+    setInvitingMember(true);
+    setError(null);
+    try {
+      const response = await fetch(`${apiUrl()}/projects/${encodeURIComponent(projectId)}/members`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({ username: usernameToInvite })
+      });
+      if (!response.ok) {
+        await handleFetchError(response);
+        return;
+      }
+
+      const data = (await response.json()) as { project: Project };
+      setProject(data.project);
+      setMemberUsername("");
+      notify("Collaborator invited", "success");
+    } catch (fetchError) {
+      const message = (fetchError as Error).message || "Unable to invite collaborator.";
+      setError(message);
+      notify(message, "error");
+    } finally {
+      setInvitingMember(false);
+    }
+  };
+
   const handleCreateNote = async (event: SubmitEvent) => {
     event.preventDefault();
     if (!props.jwtToken) {
@@ -398,20 +452,54 @@ const ProjectPage = (props: ProjectPageProps) => {
   return (
     <section class="project-detail-layout">
       <div class="project-detail-columns">
-        <section class="tasks-card">
-          <div class="project-detail-header">
-            {props.onNavigate && (
-              <button type="button" class="ghost" onClick={handleBack}>
-                Back to projects
-              </button>
-            )}
-            <div>
-              <h1>{project()?.title ?? "Project details"}</h1>
-              <p class="table-description">
-                {project()?.description || "No description provided."}
-              </p>
-            </div>
+      <section class="tasks-card">
+        <div class="project-detail-header">
+          {props.onNavigate && (
+            <button type="button" class="ghost" onClick={handleBack}>
+              Back to projects
+            </button>
+          )}
+          <div>
+            <h1>{project()?.title ?? "Project details"}</h1>
+            <p class="table-description">
+              {project()?.description || "No description provided."}
+            </p>
           </div>
+        </div>
+
+        <Show when={project()}>
+          <div class="project-member-panel">
+            <p class="helper-text">
+              Owner: <strong>{project()?.owner}</strong>
+            </p>
+            <p class="helper-text">
+              Members:
+              <Show
+                when={(project()?.members.length ?? 0) > 0}
+                fallback={<span class="member-empty">No collaborators yet.</span>}
+              >
+                <For each={project()?.members ?? []}>
+                  {(member) => <span class="member-chip">{member}</span>}
+                </For>
+              </Show>
+            </p>
+            <form class="member-form" onSubmit={handleInviteMember}>
+              <label>
+                Invite collaborator
+                <input
+                  class="text-input"
+                  value={memberUsername()}
+                  onInput={(event) => setMemberUsername(event.currentTarget.value)}
+                  placeholder="Username"
+                  required
+                />
+              </label>
+              <button class="primary" type="submit" disabled={invitingMember()}>
+                {invitingMember() ? "Inviting..." : "Add person"}
+              </button>
+            </form>
+          </div>
+        </Show>
 
           <form class="task-form" onSubmit={handleCreateTask}>
             <label>

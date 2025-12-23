@@ -1,4 +1,4 @@
-import { loadDatabase, saveDatabase } from "./db";
+import { loadDatabase, saveDatabase, type TaskRow } from "./db";
 
 export type TaskRecord = {
   id: string;
@@ -6,24 +6,18 @@ export type TaskRecord = {
   description: string;
   completed: boolean;
   projectId: string | null;
+  createdBy: string;
   createdAt: string;
   updatedAt: string;
 };
 
-const mapRow = (row: {
-  id: string;
-  title: string;
-  description: string;
-  completed: boolean;
-  projectId: string | null;
-  createdAt: string;
-  updatedAt: string;
-}) => ({
+const mapRow = (row: TaskRow): TaskRecord => ({
   id: row.id,
   title: row.title,
   description: row.description,
   completed: row.completed,
   projectId: row.projectId,
+  createdBy: row.createdBy ?? row.username,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt
 });
@@ -36,18 +30,17 @@ export const listTasks = (username: string): TaskRecord[] => {
     .map(mapRow);
 };
 
-export const findTasksForProject = (username: string, projectId: string): TaskRecord[] => {
+export const findTasksForProject = (projectId: string): TaskRecord[] => {
   const state = loadDatabase();
   return state.tasks
-    .filter((task) => task.username === username && task.projectId === projectId)
+    .filter((task) => task.projectId === projectId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .map(mapRow);
 };
 
-export const findTaskById = (username: string, taskId: string): TaskRecord | null => {
+export const findTaskRowById = (taskId: string): TaskRow | null => {
   const state = loadDatabase();
-  const task = state.tasks.find((entry) => entry.username === username && entry.id === taskId);
-  return task ? mapRow(task) : null;
+  return state.tasks.find((entry) => entry.id === taskId) ?? null;
 };
 
 export const insertTask = (username: string, task: TaskRecord): TaskRecord => {
@@ -68,13 +61,9 @@ type TaskUpdatePayload = {
   updatedAt: string;
 };
 
-export const updateTask = (
-  username: string,
-  taskId: string,
-  payload: TaskUpdatePayload
-): TaskRecord | null => {
+export const updateTask = (taskId: string, payload: TaskUpdatePayload): TaskRecord | null => {
   const state = loadDatabase();
-  const target = state.tasks.find((entry) => entry.username === username && entry.id === taskId);
+  const target = state.tasks.find((entry) => entry.id === taskId);
   if (!target) {
     return null;
   }
@@ -100,10 +89,10 @@ export const updateTask = (
   return mapRow(target);
 };
 
-export const deleteTask = (username: string, taskId: string): boolean => {
+export const deleteTask = (taskId: string): boolean => {
   const state = loadDatabase();
   const existingCount = state.tasks.length;
-  state.tasks = state.tasks.filter((entry) => !(entry.username === username && entry.id === taskId));
+  state.tasks = state.tasks.filter((entry) => entry.id !== taskId);
   if (state.tasks.length === existingCount) {
     return false;
   }

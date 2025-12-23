@@ -22,6 +22,7 @@ export type ProjectRow = {
   description: string;
   createdAt: string;
   updatedAt: string;
+  members: string[];
 };
 
 export type TaskRow = {
@@ -33,6 +34,7 @@ export type TaskRow = {
   projectId: string | null;
   createdAt: string;
   updatedAt: string;
+  createdBy?: string;
 };
 
 export type NoteRow = {
@@ -68,8 +70,14 @@ const ensureDatabase = () => {
 
 const normalizeState = (payload: Partial<DatabaseState>): DatabaseState => ({
   users: payload.users ?? [],
-  projects: payload.projects ?? [],
-  tasks: payload.tasks ?? [],
+  projects: (payload.projects ?? []).map((project) => ({
+    ...project,
+    members: project.members ?? []
+  })),
+  tasks: (payload.tasks ?? []).map((task) => ({
+    ...task,
+    createdBy: task.createdBy ?? task.username
+  })),
   notes: (payload.notes ?? []).map((note) => ({
     ...note,
     projectId: note.projectId ?? null

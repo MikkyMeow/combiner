@@ -2,12 +2,15 @@ import { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { randomUUID } from "crypto";
 import {
   deleteNote,
-  findNoteById,
+  findNoteRowById,
   insertNote,
   listNotes,
+  mapNoteRow,
   type NoteRecord,
+  type NoteRow,
   updateNote
 } from "./notesStore";
+import { findProjectForUser } from "./projectsStore";
 
 type NoteCreateBody = {
   title: string;
@@ -30,6 +33,11 @@ const normalizeProjectId = (value?: string | null): string | null => {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
 };
+
+const canAccessNote = (username: string, note: NoteRow): boolean =>
+  note.projectId ? !!findProjectForUser(username, note.projectId) : note.username === username;
+
+const toNoteRecord = (note: NoteRow): NoteRecord => mapNoteRow(note);
 
 const notesRoutes: FastifyPluginAsync = async (server) => {
   const ensureAuthenticated = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -63,11 +71,11 @@ const notesRoutes: FastifyPluginAsync = async (server) => {
       const username = requireUser(request, reply);
       if (!username) return;
 
-      const note = findNoteById(username, request.params.id);
-      if (!note) {
+      const note = findNoteRowById(request.params.id);
+      if (!note || !canAccessNote(username, note)) {
         return reply.status(404).send({ message: "Note not found" });
       }
-      return note;
+      return toNoteRecord(note);
     }
   );
 
@@ -105,8 +113,8 @@ const notesRoutes: FastifyPluginAsync = async (server) => {
       const username = requireUser(request, reply);
       if (!username) return;
 
-      const target = findNoteById(username, request.params.id);
-      if (!target) {
+      const target = findNoteRowById(request.params.id);
+      if (!target || !canAccessNote(username, target)) {
         return reply.status(404).send({ message: "Note not found" });
       }
 
@@ -129,10 +137,17 @@ const notesRoutes: FastifyPluginAsync = async (server) => {
       }
 
       if (request.body.projectId !== undefined) {
-        updates.projectId = normalizeProjectId(request.body.projectId);
+        const projectId = normalizeProjectId(request.body.projectId);
+        if (projectId !== null) {
+          const project = findProjectForUser(username, projectId);
+          if (!project) {
+            return reply.status(400).send({ message: "Project not found" });
+          }
+        }
+        updates.projectId = projectId;
       }
 
-      const updatedNote = updateNote(username, target.id, updates);
+      const updatedNote = updateNote(target.id, updates);
       if (!updatedNote) {
         return reply.status(404).send({ message: "Note not found" });
       }
@@ -148,7 +163,12 @@ const notesRoutes: FastifyPluginAsync = async (server) => {
       const username = requireUser(request, reply);
       if (!username) return;
 
-      const deleted = deleteNote(username, request.params.id);
+      const noteRow = findNoteRowById(request.params.id);
+      if (!noteRow || !canAccessNote(username, noteRow)) {
+        return reply.status(404).send({ message: "Note not found" });
+      }
+
+      const deleted = deleteNote(noteRow.id);
       if (!deleted) {
         return reply.status(404).send({ message: "Note not found" });
       }

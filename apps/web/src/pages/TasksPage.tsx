@@ -11,6 +11,7 @@ type Task = {
   createdAt: string;
   updatedAt: string;
   projectId: string | null;
+  createdBy: string;
 };
 
 type Project = {
@@ -158,6 +159,7 @@ const TasksPage = ({ jwtToken, onNotify }: TasksPageProps) => {
             <tr>
               <th>Title &amp; description</th>
               <th>Project</th>
+              <th>Created by</th>
               <th>Status</th>
               <th>Updated</th>
             </tr>
@@ -171,6 +173,7 @@ const TasksPage = ({ jwtToken, onNotify }: TasksPageProps) => {
                     <p class="table-description">{task.description || "No description provided."}</p>
                   </td>
                   <td>{getProjectLabel(task.projectId)}</td>
+                  <td>{task.createdBy}</td>
                   <td>
                     <span class={`status-pill ${task.completed ? "completed" : ""}`}>
                       {task.completed ? "Completed" : "Pending"}
