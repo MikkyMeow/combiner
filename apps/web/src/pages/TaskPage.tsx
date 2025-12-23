@@ -229,14 +229,16 @@ const TaskPage = (props: TaskPageProps) => {
         </button>
         <div>
           <h1>{task()?.title ?? "Task details"}</h1>
-          <p class="table-description">
-            <Show
-              when={task()}
-              fallback="Loading task information..."
-            >
-              {() => `Updated ${new Date(task()!.updatedAt).toLocaleString()}`}
-            </Show>
-          </p>
+            <p class="table-description">
+              <Show
+                when={task()}
+                fallback="Loading task information..."
+              >
+                {(current) => (
+                  <span>Updated {new Date(current().updatedAt).toLocaleString()}</span>
+                )}
+              </Show>
+            </p>
         </div>
       </div>
 
@@ -253,10 +255,12 @@ const TaskPage = (props: TaskPageProps) => {
           <span class={`status-pill ${completed() ? "completed" : ""}`}>
             {completed() ? "Completed" : "Pending"}
           </span>
-          <p class="helper-text">
-            {task()?.projectId ? "Linked to project" : "No project assigned."}
-            <Show when={task()?.projectId}>{() => ` ${task()!.projectId}`}</Show>
-          </p>
+            <p class="helper-text">
+              {task()?.projectId ? "Linked to project" : "No project assigned."}
+              <Show when={task()?.projectId}>
+                {(projectId) => <span> {projectId()}</span>}
+              </Show>
+            </p>
         </div>
 
         <form class="task-form" onSubmit={handleSave}>

@@ -1,7 +1,10 @@
 import { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import fastifyJwt, { FastifyJWTOptions } from "@fastify/jwt";
 import fastifyPlugin from "fastify-plugin";
-import { createUser, findUserByUsername } from "./usersStore";
+import { listNotes } from "./notesStore";
+import { listProjects } from "./projectsStore";
+import { listTasks } from "./tasksStore";
+import { createUser, findUserByUsername, type UserRecord, updateUser } from "./usersStore";
 
 interface RegisterBody {
   username: string;
@@ -29,6 +32,18 @@ const jwtOptions: FastifyJWTOptions = {
   secret: jwtSecret,
   sign: { expiresIn: "12h" }
 };
+
+type UserProfile = Pick<UserRecord, "username" | "createdAt" | "updatedAt">;
+
+interface UpdateProfileBody {
+  password?: string;
+}
+
+const buildProfile = (user: UserRecord): UserProfile => ({
+  username: user.username,
+  createdAt: user.createdAt,
+  updatedAt: user.updatedAt
+});
 
 const authRoutes: FastifyPluginAsync = async (server) => {
   await server.register(fastifyJwt, jwtOptions);
@@ -70,9 +85,64 @@ const authRoutes: FastifyPluginAsync = async (server) => {
     return { token };
   });
 
-  server.get("/me", { preValidation: [server.authenticate] }, async (request) => ({
-    user: request.user
-  }));
+  server.get(
+    "/me",
+    { preValidation: [server.authenticate] },
+    async (request, reply) => {
+      const username = request.user?.username;
+      if (!username) {
+        return reply.status(401).send({ message: "Invalid token" });
+      }
+
+      const user = findUserByUsername(username);
+      if (!user) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      return {
+        user: buildProfile(user),
+        tasks: listTasks(username),
+        notes: listNotes(username),
+        projects: listProjects(username)
+      };
+    }
+  );
+
+  server.patch<{ Body: UpdateProfileBody }>(
+    "/me",
+    { preValidation: [server.authenticate] },
+    async (request, reply) => {
+      const username = request.user?.username;
+      if (!username) {
+        return reply.status(401).send({ message: "Invalid token" });
+      }
+
+      const user = findUserByUsername(username);
+      if (!user) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      const trimmedPassword = request.body.password?.trim() ?? "";
+      if (!trimmedPassword) {
+        return reply.status(400).send({ message: "Password is required" });
+      }
+
+      const updatedUser = updateUser(username, {
+        password: trimmedPassword,
+        updatedAt: new Date().toISOString()
+      });
+      if (!updatedUser) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      return {
+        user: buildProfile(updatedUser),
+        tasks: listTasks(username),
+        notes: listNotes(username),
+        projects: listProjects(username)
+      };
+    }
+  );
 };
 
 export default fastifyPlugin(authRoutes);

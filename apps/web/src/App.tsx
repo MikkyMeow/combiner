@@ -1,6 +1,7 @@
 import { createSignal, createEffect, createMemo, onCleanup, onMount } from "solid-js";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import ProfilePage from "./pages/ProfilePage";
 import TasksPage from "./pages/TasksPage";
 import NotesPage from "./pages/NotesPage";
 import ProjectsPage from "./pages/ProjectsPage";
@@ -168,6 +169,13 @@ const App = () => {
               enqueueNotification("Registration succeeded! Please log in to continue.", "success");
               navigate("/login");
             }}
+            onNotify={enqueueNotification}
+          />
+        );
+      case "/profile":
+        return (
+          <ProfilePage
+            jwtToken={jwtToken()}
             onNotify={enqueueNotification}
           />
         );

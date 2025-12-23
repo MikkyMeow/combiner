@@ -13,3 +13,22 @@ export const createUser = (user: UserRecord): void => {
   state.users.unshift(user);
   saveDatabase(state);
 };
+
+export const updateUser = (
+  username: string,
+  payload: { password?: string; updatedAt: string }
+): UserRecord | null => {
+  const state = loadDatabase();
+  const target = state.users.find((entry) => entry.username === username);
+  if (!target) {
+    return null;
+  }
+
+  if (payload.password !== undefined) {
+    target.password = payload.password;
+  }
+  target.updatedAt = payload.updatedAt;
+
+  saveDatabase(state);
+  return target;
+};
