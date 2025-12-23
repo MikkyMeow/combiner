@@ -26,28 +26,11 @@ type TasksPageProps = {
   onNotify?: (message: string, type?: NotificationType) => void;
 };
 
-type TaskUpdatePayload = {
-  title?: string;
-  description?: string;
-  completed?: boolean;
-  projectId?: string | null;
-};
-
 const TasksPage = ({ jwtToken, onNotify }: TasksPageProps) => {
   const [tasks, setTasks] = createSignal<Task[]>([]);
   const [projects, setProjects] = createSignal<Project[]>([]);
   const [loading, setLoading] = createSignal(false);
-  const [creating, setCreating] = createSignal(false);
-  const [editing, setEditing] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
-  const [newTitle, setNewTitle] = createSignal("");
-  const [newDescription, setNewDescription] = createSignal("");
-  const [newProjectId, setNewProjectId] = createSignal("");
-  const [editingId, setEditingId] = createSignal<string | null>(null);
-  const [editTitle, setEditTitle] = createSignal("");
-  const [editDescription, setEditDescription] = createSignal("");
-  const [editProjectId, setEditProjectId] = createSignal("");
-  const editingTask = () => tasks().find((task) => task.id === editingId());
 
   const notify = (message: string, type: NotificationType = "info") => {
     onNotify?.(message, type);
@@ -150,275 +133,23 @@ const TasksPage = ({ jwtToken, onNotify }: TasksPageProps) => {
     void fetchProjects();
   });
 
-  const handleCreateTask = async (event: SubmitEvent) => {
-    event.preventDefault();
-    if (!jwtToken) {
-      handleUnauthorized();
-      return;
-    }
-
-    const title = newTitle().trim();
-    if (!title) {
-      const message = "Task title cannot be empty.";
-      setError(message);
-      notify(message, "warning");
-      return;
-    }
-
-    setCreating(true);
-    setError(null);
-    try {
-      const response = await fetch(`${apiUrl()}/tasks`, {
-        method: "POST",
-        headers: getHeaders(),
-        body: JSON.stringify({
-          title,
-          description: newDescription().trim()
-          ,
-          projectId: newProjectId()
-        })
-      });
-
-      if (!response.ok) {
-        await handleFetchError(response);
-        return;
-      }
-
-      const createdTask = (await response.json()) as Task;
-      setTasks((current) => [createdTask, ...current]);
-      setNewTitle("");
-      setNewDescription("");
-      setNewProjectId("");
-      notify("Task created", "success");
-    } catch (fetchError) {
-      const message = (fetchError as Error).message || "Unable to create task.";
-      setError(message);
-      notify(message, "error");
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const updateTask = async (id: string, body: TaskUpdatePayload, successMessage?: string) => {
-    if (!jwtToken) {
-      handleUnauthorized();
-      return null;
-    }
-
-    setError(null);
-    try {
-      const response = await fetch(`${apiUrl()}/tasks/${id}`, {
-        method: "PUT",
-        headers: getHeaders(),
-        body: JSON.stringify(body)
-      });
-
-      if (!response.ok) {
-        await handleFetchError(response);
-        return null;
-      }
-
-      const updatedTask = (await response.json()) as Task;
-      setTasks((current) =>
-        current.map((task) => (task.id === updatedTask.id ? updatedTask : task))
-      );
-
-      if (successMessage) {
-        notify(successMessage, "success");
-      }
-
-      return updatedTask;
-    } catch (fetchError) {
-      const message = (fetchError as Error).message || "Unable to update task.";
-      setError(message);
-      notify(message, "error");
-      return null;
-    }
-  };
-
-  const handleToggleCompleted = (task: Task) => {
-    void updateTask(task.id, { completed: !task.completed }, "Task status saved");
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!jwtToken) {
-      handleUnauthorized();
-      return;
-    }
-
-    setError(null);
-    try {
-      const response = await fetch(`${apiUrl()}/tasks/${id}`, {
-        method: "DELETE",
-        headers: getHeaders()
-      });
-
-      if (!response.ok) {
-        await handleFetchError(response);
-        return;
-      }
-
-      setTasks((current) => current.filter((task) => task.id !== id));
-      notify("Task removed", "success");
-    } catch (fetchError) {
-      const message = (fetchError as Error).message || "Unable to remove task.";
-      setError(message);
-      notify(message, "error");
-    }
-  };
-
-  const startEdit = (task: Task) => {
-    setEditingId(task.id);
-    setEditTitle(task.title);
-    setEditDescription(task.description);
-    setEditProjectId(task.projectId ?? "");
-  };
-
-  const handleEditSubmit = async (event: SubmitEvent) => {
-    event.preventDefault();
-    const id = editingId();
-    if (!id) {
-      return;
-    }
-
-    const title = editTitle().trim();
-    if (!title) {
-      const message = "Task title cannot be empty.";
-      setError(message);
-      notify(message, "warning");
-      return;
-    }
-
-    setEditing(true);
-    try {
-      const updatedTask = await updateTask(
-        id,
-        { title, description: editDescription().trim(), projectId: editProjectId() },
-        "Task updated"
-      );
-
-      if (updatedTask) {
-        setEditingId(null);
-        setEditProjectId("");
-      }
-    } finally {
-      setEditing(false);
-    }
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditProjectId("");
-  };
-
   return (
     <section class="tasks-card">
       <h1>Tasks</h1>
-      <form class="task-form" onSubmit={handleCreateTask}>
-        <label>
-          Title
-          <input
-            class="text-input"
-            value={newTitle()}
-            onInput={(event) => setNewTitle(event.currentTarget.value)}
-            placeholder="Short summary of the task"
-            required
-          />
-        </label>
-        <label>
-          Description (optional)
-          <textarea
-            class="text-input"
-            value={newDescription()}
-            onInput={(event) => setNewDescription(event.currentTarget.value)}
-            rows={3}
-            placeholder="More details about what needs to be done"
-          />
-        </label>
-        <label>
-          Project (optional)
-          <select
-            class="text-input"
-            value={newProjectId()}
-            onChange={(event) => setNewProjectId(event.currentTarget.value)}
-          >
-            <option value="">Unassigned</option>
-            <For each={projects()}>
-              {(project) => (
-                <option value={project.id}>{project.title}</option>
-              )}
-            </For>
-          </select>
-        </label>
-        <button class="primary" type="submit" disabled={creating()}>
-          {creating() ? "Saving…" : "New Task"}
-        </button>
-      </form>
+      <p class="helper-text">
+        Tasks are now created and managed within project pages; this view only surfaces deadlines and overall status across every project.
+      </p>
 
       <Show when={error()}>
         <p class="helper-text">{error()}</p>
       </Show>
 
       <Show when={loading()}>
-        <p class="helper-text">Loading tasks…</p>
+        <p class="helper-text">Loading tasks...</p>
       </Show>
 
       <Show when={!loading() && tasks().length === 0}>
         <p class="helper-text">You currently have no tasks.</p>
-      </Show>
-
-      <Show when={editingId()}>
-        <div class="edit-modal-wrapper">
-          <section class="edit-panel">
-            <h2>Editing task</h2>
-            <form onSubmit={handleEditSubmit}>
-            <label>
-              Title
-              <input
-                class="text-input"
-                value={editTitle()}
-                onInput={(event) => setEditTitle(event.currentTarget.value)}
-                required
-              />
-            </label>
-            <label>
-              Description
-              <textarea
-                class="text-input"
-                rows={3}
-                value={editDescription()}
-                onInput={(event) => setEditDescription(event.currentTarget.value)}
-              />
-            </label>
-            <label>
-              Project (optional)
-              <select
-                class="text-input"
-                value={editProjectId()}
-                onChange={(event) => setEditProjectId(event.currentTarget.value)}
-              >
-                <option value="">Unassigned</option>
-                <For each={projects()}>
-                  {(project) => (
-                    <option value={project.id}>{project.title}</option>
-                  )}
-                </For>
-              </select>
-            </label>
-            <div class="edit-actions">
-              <button type="button" class="ghost" onClick={cancelEdit}>
-                Cancel
-              </button>
-              <button class="primary" type="submit" disabled={editing()}>
-                {editing() ? "Saving…" : "Save"}
-              </button>
-            </div>
-          </form>
-          <p class="helper-text">
-            Editing: <strong>{editingTask()?.title || "…"}</strong>
-          </p>
-          </section>
-        </div>
       </Show>
 
       <div class="tasks-table-wrapper">
@@ -429,7 +160,6 @@ const TasksPage = ({ jwtToken, onNotify }: TasksPageProps) => {
               <th>Project</th>
               <th>Status</th>
               <th>Updated</th>
-              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -448,23 +178,6 @@ const TasksPage = ({ jwtToken, onNotify }: TasksPageProps) => {
                   </td>
                   <td>
                     <span>Updated {new Date(task.updatedAt).toLocaleString()}</span>
-                  </td>
-                  <td>
-                    <div class="task-actions">
-                      <button
-                        type="button"
-                        class="ghost"
-                        onClick={() => handleToggleCompleted(task)}
-                      >
-                        {task.completed ? "Undo" : "Complete"}
-                      </button>
-                      <button type="button" class="ghost" onClick={() => startEdit(task)}>
-                        Edit
-                      </button>
-                      <button type="button" class="ghost" onClick={() => handleDelete(task.id)}>
-                        Delete
-                      </button>
-                    </div>
                   </td>
                 </tr>
               )}
