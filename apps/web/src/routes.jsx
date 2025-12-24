@@ -6,4 +6,15 @@ const authenticatedRoutes = [
     { path: "/profile", label: "Profile" },
     { path: "/projects", label: "Projects" }
 ];
-export const getRoutes = (authenticated) => authenticated ? authenticatedRoutes : guestRoutes;
+const teamRoute = { path: "/teams", label: "Teams" };
+const isTeamRole = (role) => role === "owner" || role === "employee";
+export const getRoutes = (authenticated, role) => {
+    if (!authenticated) {
+        return guestRoutes;
+    }
+    const routes = [...authenticatedRoutes];
+    if (isTeamRole(role)) {
+        routes.push(teamRoute);
+    }
+    return routes;
+};

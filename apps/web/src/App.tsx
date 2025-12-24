@@ -5,6 +5,8 @@ import ProfilePage from "./pages/ProfilePage";
 import ProjectsPage from "./pages/ProjectsPage";
 import ProjectPage from "./pages/ProjectPage";
 import TaskPage from "./pages/TaskPage";
+import TeamsPage from "./pages/TeamsPage";
+import type { UserRole } from "./types/user";
 import { getRoutes } from "./routes";
 import NotificationStack from "./components/notifications/NotificationStack";
 import { useNotifications } from "./components/notifications/useNotifications";
@@ -26,6 +28,55 @@ const getStoredTheme = (): "dark" | "light" => {
 
 const initialToken =
   typeof window !== "undefined" ? localStorage.getItem("jwtToken") : null;
+
+const decodeBase64Url = (value: string): string | null => {
+  if (typeof window === "undefined" || typeof window.atob !== "function") {
+    return null;
+  }
+  let base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+  while (base64.length % 4 !== 0) {
+    base64 += "=";
+  }
+  try {
+    const binary = window.atob(base64);
+    try {
+      return decodeURIComponent(
+        binary
+          .split("")
+          .map((char) => `%${char.charCodeAt(0).toString(16).padStart(2, "0")}`)
+          .join("")
+      );
+    } catch {
+      return binary;
+    }
+  } catch {
+    return null;
+  }
+};
+
+const getRoleFromToken = (token: string | null): UserRole | null => {
+  if (!token) {
+    return null;
+  }
+  const parts = token.split(".");
+  if (parts.length < 2) {
+    return null;
+  }
+  const payload = decodeBase64Url(parts[1]);
+  if (!payload) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(payload) as { role?: UserRole };
+    const { role } = parsed;
+    if (role === "owner" || role === "employee" || role === "user") {
+      return role;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+};
 
 const App = () => {
   const [page, setPage] = createSignal(window.location.pathname || "/");
@@ -110,6 +161,7 @@ const App = () => {
   const isProjectDetailPath = (path: string) =>
     /^\/projects\/[^/]+$/.test(path);
   const isTaskDetailPath = (path: string) => /^\/tasks\/[^/]+$/.test(path);
+  const userRole = createMemo(() => getRoleFromToken(jwtToken()));
 
   onMount(() => {
     const handleUnload = () => saveScroll(page());
@@ -126,17 +178,17 @@ const App = () => {
     if (initialToken) {
       const currentPath = page();
       const available = routes().map((route) => route.path);
-    if (
-      !available.includes(currentPath) &&
-      !isProjectDetailPath(currentPath) &&
-      !isTaskDetailPath(currentPath)
-    ) {
-      navigate("/projects");
-    }
+      if (
+        !available.includes(currentPath) &&
+        !isProjectDetailPath(currentPath) &&
+        !isTaskDetailPath(currentPath)
+      ) {
+        navigate("/projects");
+      }
     }
   });
 
-  const routes = createMemo(() => getRoutes(!!jwtToken()));
+  const routes = createMemo(() => getRoutes(!!jwtToken(), userRole()));
 
   createEffect(() => {
     const available = routes().map((route) => route.path);
@@ -213,6 +265,14 @@ const App = () => {
             jwtToken={jwtToken()}
             onNotify={enqueueNotification}
             onNavigate={navigate}
+          />
+        );
+      case "/teams":
+        return (
+          <TeamsPage
+            jwtToken={jwtToken()}
+            userRole={userRole()}
+            onNotify={enqueueNotification}
           />
         );
       default:

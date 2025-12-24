@@ -1,3 +1,6 @@
+import { TEAM_ROLES } from "./types/user";
+import type { UserRole } from "./types/user";
+
 export type RouteDefinition = {
   path: string;
   label: string;
@@ -13,5 +16,18 @@ const authenticatedRoutes: RouteDefinition[] = [
   { path: "/projects", label: "Projects" }
 ];
 
-export const getRoutes = (authenticated: boolean): RouteDefinition[] =>
-  authenticated ? authenticatedRoutes : guestRoutes;
+const teamRoute: RouteDefinition = { path: "/teams", label: "Teams" };
+
+export const getRoutes = (
+  authenticated: boolean,
+  role: UserRole | null
+): RouteDefinition[] => {
+  if (!authenticated) {
+    return guestRoutes;
+  }
+  const routes = [...authenticatedRoutes];
+  if (role && TEAM_ROLES.includes(role)) {
+    routes.push(teamRoute);
+  }
+  return routes;
+};
