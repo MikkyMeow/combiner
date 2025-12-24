@@ -1,6 +1,7 @@
-import { loadDatabase, saveDatabase, type UserRow } from "./db";
+import { loadDatabase, saveDatabase, type UserRow, type UserRole } from "./db";
 
 export type UserRecord = UserRow;
+export type { UserRole };
 
 export const findUserByUsername = (username: string): UserRecord | null => {
   const state = loadDatabase();

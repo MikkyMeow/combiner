@@ -8,11 +8,14 @@ fs.mkdirSync(dataDir, { recursive: true });
 
 const databasePath = path.join(dataDir, "combiner.json");
 
+export type UserRole = "owner" | "user" | "employee";
+
 export type UserRow = {
   username: string;
   password: string;
   createdAt: string;
   updatedAt: string;
+  role: UserRole;
 };
 
 export type ProjectRow = {
@@ -55,6 +58,29 @@ export type DatabaseState = {
   notes: NoteRow[];
 };
 
+type RawUserRow = Omit<UserRow, "role"> & {
+  role?: UserRole;
+};
+
+type RawProjectRow = Omit<ProjectRow, "members"> & {
+  members?: string[];
+};
+
+type RawTaskRow = Omit<TaskRow, "createdBy"> & {
+  createdBy?: string;
+};
+
+type RawNoteRow = Omit<NoteRow, "projectId"> & {
+  projectId?: string | null;
+};
+
+type RawDatabaseState = {
+  users?: RawUserRow[];
+  projects?: RawProjectRow[];
+  tasks?: RawTaskRow[];
+  notes?: RawNoteRow[];
+};
+
 const initialState: DatabaseState = {
   users: [],
   projects: [],
@@ -68,8 +94,11 @@ const ensureDatabase = () => {
   }
 };
 
-const normalizeState = (payload: Partial<DatabaseState>): DatabaseState => ({
-  users: payload.users ?? [],
+const normalizeState = (payload: RawDatabaseState): DatabaseState => ({
+  users: (payload.users ?? []).map((user) => ({
+    ...user,
+    role: user.role ?? "user"
+  })),
   projects: (payload.projects ?? []).map((project) => ({
     ...project,
     members: project.members ?? []
@@ -87,9 +116,12 @@ const normalizeState = (payload: Partial<DatabaseState>): DatabaseState => ({
 export const loadDatabase = (): DatabaseState => {
   ensureDatabase();
   const raw = fs.readFileSync(databasePath, "utf8");
-  const parsed = JSON.parse(raw) as Partial<DatabaseState>;
+  const parsed = JSON.parse(raw) as RawDatabaseState;
   const normalized = normalizeState(parsed);
-  if (parsed.notes === undefined) {
+  const needsSchemaUpdate =
+    parsed.notes === undefined ||
+    (parsed.users ?? []).some((user) => user.role === undefined);
+  if (needsSchemaUpdate) {
     saveDatabase(normalized);
   }
   return normalized;

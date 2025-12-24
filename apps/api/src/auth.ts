@@ -4,7 +4,13 @@ import fastifyPlugin from "fastify-plugin";
 import { listNotes } from "./notesStore";
 import { listProjects } from "./projectsStore";
 import { listTasks } from "./tasksStore";
-import { createUser, findUserByUsername, type UserRecord, updateUser } from "./usersStore";
+import {
+  createUser,
+  findUserByUsername,
+  type UserRecord,
+  type UserRole,
+  updateUser
+} from "./usersStore";
 
 interface RegisterBody {
   username: string;
@@ -13,6 +19,7 @@ interface RegisterBody {
 
 interface JwtPayload {
   username: string;
+  role: UserRole;
 }
 
 declare module "@fastify/jwt" {
@@ -33,7 +40,7 @@ const jwtOptions: FastifyJWTOptions = {
   sign: { expiresIn: "12h" }
 };
 
-type UserProfile = Pick<UserRecord, "username" | "createdAt" | "updatedAt">;
+type UserProfile = Pick<UserRecord, "username" | "createdAt" | "updatedAt" | "role">;
 
 interface UpdateProfileBody {
   password?: string;
@@ -42,7 +49,8 @@ interface UpdateProfileBody {
 const buildProfile = (user: UserRecord): UserProfile => ({
   username: user.username,
   createdAt: user.createdAt,
-  updatedAt: user.updatedAt
+  updatedAt: user.updatedAt,
+  role: user.role
 });
 
 const authRoutes: FastifyPluginAsync = async (server) => {
@@ -68,7 +76,8 @@ const authRoutes: FastifyPluginAsync = async (server) => {
       username,
       password,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
+      role: "user"
     });
     return { message: "User registered" };
   });
@@ -81,7 +90,7 @@ const authRoutes: FastifyPluginAsync = async (server) => {
       return reply.status(401).send({ message: "Invalid credentials" });
     }
 
-    const token = await reply.jwtSign({ username });
+    const token = await reply.jwtSign({ username, role: user.role });
     return { token };
   });
 

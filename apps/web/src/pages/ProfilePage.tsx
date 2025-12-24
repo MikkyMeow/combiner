@@ -3,10 +3,18 @@ import type { NotificationType } from "../components/notifications/useNotificati
 
 const apiUrl = () => import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
+type UserRole = "owner" | "user" | "employee";
+const ROLE_LABELS: Record<UserRole, string> = {
+  owner: "Owner",
+  user: "User",
+  employee: "Employee"
+};
+
 type UserProfile = {
   username: string;
   createdAt: string;
   updatedAt: string;
+  role: UserRole;
 };
 
 type Task = {
@@ -253,6 +261,7 @@ const ProfilePage = ({ jwtToken, onNotify }: ProfilePageProps) => {
                   <h2>{data.user.username}</h2>
                   <p class="profile-hero__subtitle">Member since {formatDate(data.user.createdAt)}</p>
                   <div class="profile-hero__meta">
+                    <span>Role {ROLE_LABELS[data.user.role]}</span>
                     <span>Last updated {formatDate(data.user.updatedAt)}</span>
                     <span>{data.tasks.length} tasks · {data.notes.length} notes · {data.projects.length} projects</span>
                   </div>
