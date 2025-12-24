@@ -1,0 +1,244 @@
+import { createSignal, createEffect, createMemo, onCleanup, onMount } from "solid-js";
+import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
+import ProfilePage from "./pages/ProfilePage";
+import ProjectsPage from "./pages/ProjectsPage";
+import ProjectPage from "./pages/ProjectPage";
+import TaskPage from "./pages/TaskPage";
+import TeamsPage from "./pages/TeamsPage";
+import { getRoutes } from "./routes";
+import NotificationStack from "./components/notifications/NotificationStack";
+import { useNotifications } from "./components/notifications/useNotifications";
+const themeKey = "combiner-theme";
+const getStoredTheme = () => {
+    if (typeof window === "undefined") {
+        return "dark";
+    }
+    const stored = localStorage.getItem(themeKey);
+    if (stored === "light" || stored === "dark") {
+        return stored;
+    }
+    if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+        return "dark";
+    }
+    return "light";
+};
+const initialToken = typeof window !== "undefined" ? localStorage.getItem("jwtToken") : null;
+const decodeBase64Url = (value) => {
+    if (typeof window === "undefined" || typeof window.atob !== "function") {
+        return null;
+    }
+    let base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+    while (base64.length % 4 !== 0) {
+        base64 += "=";
+    }
+    try {
+        const binary = window.atob(base64);
+        try {
+            return decodeURIComponent(binary
+                .split("")
+                .map((char) => `%${char.charCodeAt(0).toString(16).padStart(2, "0")}`)
+                .join(""));
+        }
+        catch {
+            return binary;
+        }
+    }
+    catch {
+        return null;
+    }
+};
+const getRoleFromToken = (token) => {
+    if (!token) {
+        return null;
+    }
+    const parts = token.split(".");
+    if (parts.length < 2) {
+        return null;
+    }
+    const payload = decodeBase64Url(parts[1]);
+    if (!payload) {
+        return null;
+    }
+    try {
+        const parsed = JSON.parse(payload);
+        const { role } = parsed;
+        if (role === "owner" || role === "employee" || role === "user") {
+            return role;
+        }
+    }
+    catch {
+        /* ignore */
+    }
+    return null;
+};
+const App = () => {
+    const [page, setPage] = createSignal(window.location.pathname || "/");
+    const [jwtToken, setJwtToken] = createSignal(initialToken ?? null);
+    const [theme, setTheme] = createSignal(getStoredTheme());
+    const { notifications, enqueueNotification, dismissNotification } = useNotifications();
+    const scrollKey = (path) => `scroll-position:${path}`;
+    const canPersistScroll = () => typeof window !== "undefined" && "sessionStorage" in window;
+    const saveScroll = (path) => {
+        if (!canPersistScroll())
+            return;
+        try {
+            window.sessionStorage.setItem(scrollKey(path), window.scrollY.toString());
+        }
+        catch {
+            /* ignore storage exceptions */
+        }
+    };
+    let restoreHandle = null;
+    const restoreScroll = (path) => {
+        if (!canPersistScroll())
+            return;
+        const stored = window.sessionStorage.getItem(scrollKey(path));
+        if (!stored)
+            return;
+        const value = Number(stored);
+        if (Number.isNaN(value))
+            return;
+        if (restoreHandle !== null) {
+            window.cancelAnimationFrame(restoreHandle);
+        }
+        restoreHandle = window.requestAnimationFrame(() => {
+            window.scrollTo(0, value);
+            restoreHandle = null;
+        });
+    };
+    createEffect(() => {
+        const handler = () => {
+            saveScroll(page());
+            setPage(window.location.pathname || "/");
+        };
+        window.addEventListener("popstate", handler);
+        onCleanup(() => window.removeEventListener("popstate", handler));
+    });
+    createEffect(() => {
+        restoreScroll(page());
+    });
+    const navigate = (target) => {
+        saveScroll(page());
+        window.history.pushState(null, "", target);
+        setPage(target);
+    };
+    const onAuthenticated = (token) => {
+        setJwtToken(token);
+        navigate("/projects");
+    };
+    const handleLogout = () => {
+        setJwtToken(null);
+        localStorage.removeItem("jwtToken");
+        navigate("/login");
+    };
+    const applyThemePreference = (value) => {
+        if (typeof document !== "undefined") {
+            document.documentElement.dataset.theme = value;
+        }
+        if (typeof window !== "undefined") {
+            localStorage.setItem(themeKey, value);
+        }
+    };
+    createEffect(() => {
+        applyThemePreference(theme());
+    });
+    const toggleTheme = () => {
+        setTheme((value) => (value === "dark" ? "light" : "dark"));
+    };
+    const isProjectDetailPath = (path) => /^\/projects\/[^/]+$/.test(path);
+    const isTaskDetailPath = (path) => /^\/tasks\/[^/]+$/.test(path);
+    const userRole = createMemo(() => getRoleFromToken(jwtToken()));
+    onMount(() => {
+        const handleUnload = () => saveScroll(page());
+        const handleScroll = () => saveScroll(page());
+        window.history.scrollRestoration = "manual";
+        window.addEventListener("beforeunload", handleUnload);
+        window.addEventListener("scroll", handleScroll, { passive: true });
+        onCleanup(() => {
+            window.removeEventListener("beforeunload", handleUnload);
+            window.removeEventListener("scroll", handleScroll);
+            window.history.scrollRestoration = "auto";
+        });
+        if (initialToken) {
+            const currentPath = page();
+            const available = routes().map((route) => route.path);
+            if (!available.includes(currentPath) &&
+                !isProjectDetailPath(currentPath) &&
+                !isTaskDetailPath(currentPath)) {
+                navigate("/projects");
+            }
+        }
+    });
+    const routes = createMemo(() => getRoutes(!!jwtToken(), userRole()));
+    createEffect(() => {
+        const available = routes().map((route) => route.path);
+        if (available.length === 0)
+            return;
+        const currentPath = page();
+        if (!available.includes(currentPath) &&
+            !isProjectDetailPath(currentPath) &&
+            !isTaskDetailPath(currentPath)) {
+            navigate(available[0]);
+        }
+    });
+    createEffect(() => {
+        const token = jwtToken();
+        if (token) {
+            localStorage.setItem("jwtToken", token);
+        }
+        else {
+            localStorage.removeItem("jwtToken");
+        }
+    });
+    const renderPage = () => {
+        const taskMatch = page().match(/^\/tasks\/([^/]+)$/);
+        if (taskMatch) {
+            const taskId = decodeURIComponent(taskMatch[1]);
+            return (<TaskPage taskId={taskId} jwtToken={jwtToken()} onNotify={enqueueNotification} onNavigate={navigate}/>);
+        }
+        const projectMatch = page().match(/^\/projects\/([^/]+)$/);
+        if (projectMatch) {
+            const projectId = decodeURIComponent(projectMatch[1]);
+            return (<ProjectPage projectId={projectId} jwtToken={jwtToken()} onNotify={enqueueNotification} onNavigate={navigate}/>);
+        }
+        switch (page()) {
+            case "/login":
+                return <LoginPage onAuthenticated={onAuthenticated}/>;
+            case "/register":
+                return (<RegisterPage onSuccess={() => {
+                        enqueueNotification("Registration succeeded! Please log in to continue.", "success");
+                        navigate("/login");
+                    }} onNotify={enqueueNotification}/>);
+            case "/profile":
+                return (<ProfilePage jwtToken={jwtToken()} onNotify={enqueueNotification}/>);
+            case "/projects":
+                return (<ProjectsPage jwtToken={jwtToken()} onNotify={enqueueNotification} onNavigate={navigate}/>);
+            case "/teams":
+                return (<TeamsPage jwtToken={jwtToken()} userRole={userRole()} onNotify={enqueueNotification}/>);
+            default:
+                return null;
+        }
+    };
+    return (<div class="app-shell">
+      <nav class="top-nav">
+        <h1 class="site-title">Combiner Auth</h1>
+        <div class="nav-controls">
+          <div class="nav-actions">
+            {routes().map((route) => (<button type="button" class="nav-link" onClick={() => navigate(route.path)}>
+                {route.label}
+              </button>))}
+            {jwtToken() && (<button type="button" class="nav-link" onClick={handleLogout}>
+                Logout
+              </button>)}
+          </div>
+          <button type="button" class="theme-toggle" onClick={toggleTheme} aria-label="Toggle color theme">
+            {theme() === "dark" ? "Light mode" : "Dark mode"}
+          </button>
+        </div>
+      </nav>
+      <div class="content">{renderPage()}</div>
+      <NotificationStack notifications={notifications()} onDismiss={dismissNotification}/>
+    </div>);
+};
+export default App;
