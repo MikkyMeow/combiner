@@ -16,6 +16,7 @@ export type UserRow = {
   createdAt: string;
   updatedAt: string;
   role: UserRole;
+  company?: string | null;
 };
 
 export type ProjectRow = {
@@ -58,8 +59,13 @@ export type DatabaseState = {
   notes: NoteRow[];
 };
 
-type RawUserRow = Omit<UserRow, "role"> & {
+type RawUserRow = {
+  username: string;
+  password: string;
+  createdAt: string;
+  updatedAt: string;
   role?: UserRole;
+  company?: string | null;
 };
 
 type RawProjectRow = Omit<ProjectRow, "members"> & {
@@ -97,7 +103,8 @@ const ensureDatabase = () => {
 const normalizeState = (payload: RawDatabaseState): DatabaseState => ({
   users: (payload.users ?? []).map((user) => ({
     ...user,
-    role: user.role ?? "user"
+    role: user.role ?? "user",
+    company: user.company ?? null
   })),
   projects: (payload.projects ?? []).map((project) => ({
     ...project,
@@ -120,7 +127,9 @@ export const loadDatabase = (): DatabaseState => {
   const normalized = normalizeState(parsed);
   const needsSchemaUpdate =
     parsed.notes === undefined ||
-    (parsed.users ?? []).some((user) => user.role === undefined);
+    (parsed.users ?? []).some(
+      (user) => user.role === undefined || user.company === undefined
+    );
   if (needsSchemaUpdate) {
     saveDatabase(normalized);
   }

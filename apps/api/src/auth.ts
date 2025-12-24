@@ -40,7 +40,7 @@ const jwtOptions: FastifyJWTOptions = {
   sign: { expiresIn: "12h" }
 };
 
-type UserProfile = Pick<UserRecord, "username" | "createdAt" | "updatedAt" | "role">;
+type UserProfile = Pick<UserRecord, "username" | "createdAt" | "updatedAt" | "role" | "company">;
 
 interface UpdateProfileBody {
   password?: string;
@@ -50,7 +50,8 @@ const buildProfile = (user: UserRecord): UserProfile => ({
   username: user.username,
   createdAt: user.createdAt,
   updatedAt: user.updatedAt,
-  role: user.role
+  role: user.role,
+  company: user.company ?? null
 });
 
 const authRoutes: FastifyPluginAsync = async (server) => {

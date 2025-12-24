@@ -15,6 +15,7 @@ type UserProfile = {
   createdAt: string;
   updatedAt: string;
   role: UserRole;
+  company: string | null;
 };
 
 type Task = {
@@ -262,6 +263,9 @@ const ProfilePage = ({ jwtToken, onNotify }: ProfilePageProps) => {
                   <p class="profile-hero__subtitle">Member since {formatDate(data.user.createdAt)}</p>
                   <div class="profile-hero__meta">
                     <span>Role {ROLE_LABELS[data.user.role]}</span>
+                    <Show when={data.user.company}>
+                      <span>Company {data.user.company}</span>
+                    </Show>
                     <span>Last updated {formatDate(data.user.updatedAt)}</span>
                     <span>{data.tasks.length} tasks · {data.notes.length} notes · {data.projects.length} projects</span>
                   </div>
