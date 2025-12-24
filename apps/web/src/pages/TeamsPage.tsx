@@ -156,11 +156,6 @@ const TeamsPage = (props: TeamsPageProps) => {
 
   const canSendChat = () => {
     const socket = chatSocket();
-    console.log('socket', chatSocket());
-    console.log('socket?.readyState', socket?.readyState);
-    console.log('WebSocket.OPEN', WebSocket.OPEN);
-    console.log('userCompany()', userCompany());
-    console.log('chatInput()', chatInput());
     return (
       !!socket &&
       socket.readyState === WebSocket.OPEN &&
