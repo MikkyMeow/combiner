@@ -16,7 +16,10 @@ type TaskCreateBody = {
   projectId?: string;
 };
 
-type TaskUpdateBody = Partial<TaskCreateBody> & {
+type TaskUpdateBody = {
+  title?: string;
+  description?: string;
+  projectId?: string | null;
   completed?: boolean;
 };
 

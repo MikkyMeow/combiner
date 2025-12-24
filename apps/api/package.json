@@ -7,13 +7,16 @@
     "dev": "tsx src/index.ts"
   },
   "dependencies": {
-    "@fastify/cors": "^9.0.0",
-    "@fastify/jwt": "^5.0.0",
-    "fastify": "^4.22.0",
-    "fastify-plugin": "^5.1.0"
+    "@fastify/cors": "^11.2.0",
+    "@fastify/jwt": "^10.0.0",
+    "@fastify/websocket": "^11.2.0",
+    "fastify": "^5.6.2",
+    "fastify-plugin": "^5.1.0",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
+    "@types/ws": "^8.18.1",
     "typescript": "^5.4.0"
   }
 }

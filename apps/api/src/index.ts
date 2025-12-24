@@ -2,6 +2,7 @@ import "./db";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import authRoutes from "./auth";
+import chatRoutes from "./chat";
 import tasksRoutes from "./tasks";
 import notesRoutes from "./notes";
 import projectsRoutes from "./projects";
@@ -15,6 +16,7 @@ server.get("/hello", async () => ({ message: "Hello from backend" }));
 const start = async () => {
   try {
     await server.register(authRoutes);
+    await server.register(chatRoutes);
     await server.register(tasksRoutes);
     await server.register(notesRoutes);
     await server.register(projectsRoutes);
