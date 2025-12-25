@@ -1,0 +1,515 @@
+import { createEffect, createSignal, For, Show } from "solid-js";
+const apiUrl = () => import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+const ProjectPage = (props) => {
+    const [project, setProject] = createSignal(null);
+    const [tasks, setTasks] = createSignal([]);
+    const [notes, setNotes] = createSignal([]);
+    const [loading, setLoading] = createSignal(false);
+    const [error, setError] = createSignal(null);
+    const [creating, setCreating] = createSignal(false);
+    const [newTitle, setNewTitle] = createSignal("");
+    const [newDescription, setNewDescription] = createSignal("");
+    const [noteTitle, setNoteTitle] = createSignal("");
+    const [noteContent, setNoteContent] = createSignal("");
+    const [noteTags, setNoteTags] = createSignal("");
+    const [savingNote, setSavingNote] = createSignal(false);
+    const [memberUsername, setMemberUsername] = createSignal("");
+    const [invitingMember, setInvitingMember] = createSignal(false);
+    const notify = (message, type = "info") => {
+        props.onNotify?.(message, type);
+    };
+    const getHeaders = () => {
+        const headers = {
+            "Content-Type": "application/json"
+        };
+        if (props.jwtToken) {
+            headers.Authorization = `Bearer ${props.jwtToken}`;
+        }
+        return headers;
+    };
+    const handleUnauthorized = () => {
+        const message = "Please authenticate before viewing project details.";
+        setError(message);
+        notify(message, "warning");
+    };
+    const handleFetchError = async (response) => {
+        let message = "Unable to reach the server.";
+        try {
+            const payload = (await response.json());
+            if (payload?.message) {
+                message = payload.message;
+            }
+            else {
+                message = `${response.statusText} (${response.status})`;
+            }
+        }
+        catch {
+            message = `${response.statusText} (${response.status})`;
+        }
+        setError(message);
+        notify(message, "error");
+    };
+    const parseTags = (input) => input
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter((tag) => tag.length > 0);
+    const fetchProject = async (projectId) => {
+        if (!props.jwtToken) {
+            handleUnauthorized();
+            return;
+        }
+        setLoading(true);
+        setError(null);
+        setProject(null);
+        setTasks([]);
+        setNotes([]);
+        try {
+            const response = await fetch(`${apiUrl()}/projects/${encodeURIComponent(projectId)}`, {
+                headers: getHeaders()
+            });
+            if (!response.ok) {
+                await handleFetchError(response);
+                return;
+            }
+            const data = (await response.json());
+            setProject(data.project);
+            setTasks(data.tasks ?? []);
+            setNotes(data.notes ?? []);
+        }
+        catch (fetchError) {
+            const message = fetchError.message || "Unable to load project data.";
+            setError(message);
+            notify(message, "error");
+        }
+        finally {
+            setLoading(false);
+        }
+    };
+    createEffect(() => {
+        const projectId = props.projectId?.trim();
+        if (!projectId) {
+            setProject(null);
+            setTasks([]);
+            setNotes([]);
+            setLoading(false);
+            const message = "Project identifier is missing.";
+            setError(message);
+            return;
+        }
+        void fetchProject(projectId);
+    });
+    const handleBack = () => {
+        props.onNavigate?.("/projects");
+    };
+    const updateTask = async (id, body, successMessage) => {
+        if (!props.jwtToken) {
+            handleUnauthorized();
+            return null;
+        }
+        try {
+            const response = await fetch(`${apiUrl()}/tasks/${encodeURIComponent(id)}`, {
+                method: "PUT",
+                headers: getHeaders(),
+                body: JSON.stringify(body)
+            });
+            if (!response.ok) {
+                await handleFetchError(response);
+                return null;
+            }
+            const updated = (await response.json());
+            setTasks((current) => current.map((task) => (task.id === updated.id ? updated : task)));
+            if (successMessage) {
+                notify(successMessage, "success");
+            }
+            return updated;
+        }
+        catch (fetchError) {
+            const message = fetchError.message || "Unable to update task.";
+            setError(message);
+            notify(message, "error");
+            return null;
+        }
+    };
+    const handleCreateTask = async (event) => {
+        event.preventDefault();
+        if (!props.jwtToken) {
+            handleUnauthorized();
+            return;
+        }
+        const title = newTitle().trim();
+        if (!title) {
+            const message = "Task title cannot be empty.";
+            setError(message);
+            notify(message, "warning");
+            return;
+        }
+        const currentProject = project();
+        if (!currentProject) {
+            const message = "Project information is missing.";
+            setError(message);
+            notify(message, "warning");
+            return;
+        }
+        setCreating(true);
+        setError(null);
+        try {
+            const response = await fetch(`${apiUrl()}/tasks`, {
+                method: "POST",
+                headers: getHeaders(),
+                body: JSON.stringify({
+                    title,
+                    description: newDescription().trim(),
+                    projectId: currentProject.id
+                })
+            });
+            if (!response.ok) {
+                await handleFetchError(response);
+                return;
+            }
+            const created = (await response.json());
+            setTasks((current) => [created, ...current]);
+            setNewTitle("");
+            setNewDescription("");
+            notify("Task created", "success");
+        }
+        catch (fetchError) {
+            const message = fetchError.message || "Unable to create task.";
+            setError(message);
+            notify(message, "error");
+        }
+        finally {
+            setCreating(false);
+        }
+    };
+    const handleInviteMember = async (event) => {
+        event.preventDefault();
+        if (!props.jwtToken) {
+            handleUnauthorized();
+            return;
+        }
+        const usernameToInvite = memberUsername().trim();
+        if (!usernameToInvite) {
+            const message = "Username is required to invite someone.";
+            setError(message);
+            notify(message, "warning");
+            return;
+        }
+        const projectId = project()?.id ?? props.projectId?.trim();
+        if (!projectId) {
+            const message = "Project identifier is missing.";
+            setError(message);
+            notify(message, "warning");
+            return;
+        }
+        setInvitingMember(true);
+        setError(null);
+        try {
+            const response = await fetch(`${apiUrl()}/projects/${encodeURIComponent(projectId)}/members`, {
+                method: "POST",
+                headers: getHeaders(),
+                body: JSON.stringify({ username: usernameToInvite })
+            });
+            if (!response.ok) {
+                await handleFetchError(response);
+                return;
+            }
+            const data = (await response.json());
+            setProject(data.project);
+            setMemberUsername("");
+            notify("Collaborator invited", "success");
+        }
+        catch (fetchError) {
+            const message = fetchError.message || "Unable to invite collaborator.";
+            setError(message);
+            notify(message, "error");
+        }
+        finally {
+            setInvitingMember(false);
+        }
+    };
+    const handleCreateNote = async (event) => {
+        event.preventDefault();
+        if (!props.jwtToken) {
+            handleUnauthorized();
+            return;
+        }
+        const title = noteTitle().trim();
+        if (!title) {
+            const message = "Note title is required.";
+            setError(message);
+            notify(message, "warning");
+            return;
+        }
+        const currentProject = project();
+        if (!currentProject) {
+            const message = "Project data is not available.";
+            setError(message);
+            notify(message, "warning");
+            return;
+        }
+        setSavingNote(true);
+        setError(null);
+        try {
+            const response = await fetch(`${apiUrl()}/notes`, {
+                method: "POST",
+                headers: getHeaders(),
+                body: JSON.stringify({
+                    title,
+                    content: noteContent().trim(),
+                    tags: parseTags(noteTags()),
+                    projectId: currentProject.id
+                })
+            });
+            if (!response.ok) {
+                await handleFetchError(response);
+                return;
+            }
+            const created = (await response.json());
+            setNotes((current) => [created, ...current]);
+            setNoteTitle("");
+            setNoteContent("");
+            setNoteTags("");
+            notify("Note saved to project", "success");
+        }
+        catch (fetchError) {
+            const message = fetchError.message || "Unable to save note.";
+            setError(message);
+            notify(message, "error");
+        }
+        finally {
+            setSavingNote(false);
+        }
+    };
+    const handleDelete = async (id) => {
+        if (!props.jwtToken) {
+            handleUnauthorized();
+            return;
+        }
+        try {
+            const response = await fetch(`${apiUrl()}/tasks/${encodeURIComponent(id)}`, {
+                method: "DELETE",
+                headers: getHeaders()
+            });
+            if (!response.ok) {
+                await handleFetchError(response);
+                return;
+            }
+            setTasks((current) => current.filter((task) => task.id !== id));
+            notify("Task removed", "success");
+        }
+        catch (fetchError) {
+            const message = fetchError.message || "Unable to remove task.";
+            setError(message);
+            notify(message, "error");
+        }
+    };
+    const handleDeleteNote = async (noteId) => {
+        if (!props.jwtToken) {
+            handleUnauthorized();
+            return;
+        }
+        try {
+            const response = await fetch(`${apiUrl()}/notes/${encodeURIComponent(noteId)}`, {
+                method: "DELETE",
+                headers: getHeaders()
+            });
+            if (!response.ok) {
+                await handleFetchError(response);
+                return;
+            }
+            setNotes((current) => current.filter((note) => note.id !== noteId));
+            notify("Note removed from project", "info");
+        }
+        catch (fetchError) {
+            const message = fetchError.message || "Unable to remove note.";
+            setError(message);
+            notify(message, "error");
+        }
+    };
+    const handleToggleCompleted = (task) => {
+        void updateTask(task.id, { completed: !task.completed }, "Task status saved");
+    };
+    const viewTaskDetail = (task) => {
+        props.onNavigate?.(`/tasks/${encodeURIComponent(task.id)}`);
+    };
+    return (<section class="project-detail-layout">
+      <div class="project-detail-columns">
+      <section class="tasks-card">
+        <div class="project-detail-header">
+          {props.onNavigate && (<button type="button" class="ghost" onClick={handleBack}>
+              Back to projects
+            </button>)}
+          <div>
+            <h1>{project()?.title ?? "Project details"}</h1>
+            <p class="table-description">
+              {project()?.description || "No description provided."}
+            </p>
+          </div>
+        </div>
+
+        <Show when={project()}>
+          <div class="project-member-panel">
+            <p class="helper-text">
+              Owner: <strong>{project()?.owner}</strong>
+            </p>
+            <p class="helper-text">
+              Members:
+              <Show when={(project()?.members.length ?? 0) > 0} fallback={<span class="member-empty">No collaborators yet.</span>}>
+                <For each={project()?.members ?? []}>
+                  {(member) => <span class="member-chip">{member}</span>}
+                </For>
+              </Show>
+            </p>
+            <form class="member-form" onSubmit={handleInviteMember}>
+              <label>
+                Invite collaborator
+                <input class="text-input" value={memberUsername()} onInput={(event) => setMemberUsername(event.currentTarget.value)} placeholder="Username" required/>
+              </label>
+              <button class="primary" type="submit" disabled={invitingMember()}>
+                {invitingMember() ? "Inviting..." : "Add person"}
+              </button>
+            </form>
+          </div>
+        </Show>
+
+          <form class="task-form" onSubmit={handleCreateTask}>
+            <label>
+              Title
+              <input class="text-input" value={newTitle()} onInput={(event) => setNewTitle(event.currentTarget.value)} placeholder="Task title" required/>
+            </label>
+            <label>
+              Description (optional)
+              <textarea class="text-input" value={newDescription()} onInput={(event) => setNewDescription(event.currentTarget.value)} rows={3} placeholder="Describe what needs to be done"/>
+            </label>
+            <button class="primary" type="submit" disabled={creating()}>
+              {creating() ? "Saving..." : "Add task"}
+            </button>
+          </form>
+
+          <Show when={error()}>
+            <p class="helper-text">{error()}</p>
+          </Show>
+
+          <Show when={loading()}>
+            <p class="helper-text">Loading project...</p>
+          </Show>
+
+          <Show when={!loading() && project()}>
+            <p class="helper-text">
+              {tasks().length} task{tasks().length === 1 ? "" : "s"} attached to this project.
+            </p>
+
+            <Show when={tasks().length === 0}>
+              <p class="helper-text">No tasks are linked to this project yet.</p>
+            </Show>
+
+            <Show when={tasks().length > 0}>
+              <div class="tasks-table-wrapper">
+                <table class="tasks-table">
+                  <thead>
+                    <tr>
+                      <th>Title &amp; description</th>
+                      <th>Status</th>
+                      <th>Updated</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <For each={tasks()}>
+                      {(task) => (<tr class={task.completed ? "completed" : ""}>
+                          <td>
+                            <strong>{task.title}</strong>
+                            <p class="table-description">
+                              {task.description || "No description provided."}
+                            </p>
+                          </td>
+                          <td>
+                            <span class={`status-pill ${task.completed ? "completed" : ""}`}>
+                              {task.completed ? "Completed" : "Pending"}
+                            </span>
+                          </td>
+                          <td>
+                            <span>Updated {new Date(task.updatedAt).toLocaleString()}</span>
+                          </td>
+                          <td>
+                            <div class="task-actions">
+                              <button type="button" class="ghost" onClick={() => handleToggleCompleted(task)}>
+                                {task.completed ? "Undo" : "Complete"}
+                              </button>
+                              <button type="button" class="ghost" onClick={() => viewTaskDetail(task)}>
+                                View
+                              </button>
+                              <button type="button" class="ghost" onClick={() => handleDelete(task.id)}>
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>)}
+                    </For>
+                  </tbody>
+                </table>
+              </div>
+            </Show>
+          </Show>
+        </section>
+
+        <Show when={!loading() && project()}>
+          <article class="knowledge-panel project-notes-card">
+            <h2>Project notes</h2>
+            <p class="helper-text">
+              Capture quick guidance, insights, or reminders that live alongside this project.
+            </p>
+
+            <form class="knowledge-form" onSubmit={handleCreateNote}>
+              <label>
+                Title
+                <input class="text-input" value={noteTitle()} onInput={(event) => setNoteTitle(event.currentTarget.value)} placeholder="Note title" required/>
+              </label>
+              <label>
+                Content
+                <textarea class="text-input knowledge-textarea" value={noteContent()} onInput={(event) => setNoteContent(event.currentTarget.value)} placeholder="Details or context for this note"/>
+              </label>
+              <label>
+                Tags (comma separated)
+                <input class="text-input" value={noteTags()} onInput={(event) => setNoteTags(event.currentTarget.value)}/>
+              </label>
+              <button class="primary" type="submit" disabled={savingNote()}>
+                {savingNote() ? "Saving..." : "Save note"}
+              </button>
+            </form>
+
+            <Show when={notes().length === 0}>
+              <p class="helper-text">No notes attached to this project yet.</p>
+            </Show>
+
+            <Show when={notes().length > 0}>
+              <div class="knowledge-list">
+                <For each={notes()}>
+                  {(note) => (<article class="knowledge-item">
+                      <div class="knowledge-item-header">
+                        <strong>{note.title}</strong>
+                        <span class="status-pill">
+                          Updated {new Date(note.updatedAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p>{note.content || "No content yet."}</p>
+                      <Show when={note.tags.length > 0}>
+                        <div class="knowledge-item-tags">
+                          <For each={note.tags}>{(tag) => <span class="knowledge-tag">{tag}</span>}</For>
+                        </div>
+                      </Show>
+                      <div class="knowledge-actions">
+                        <button class="ghost" type="button" onClick={() => handleDeleteNote(note.id)}>
+                          Delete
+                        </button>
+                      </div>
+                    </article>)}
+                </For>
+              </div>
+            </Show>
+          </article>
+        </Show>
+      </div>
+    </section>);
+};
+export default ProjectPage;

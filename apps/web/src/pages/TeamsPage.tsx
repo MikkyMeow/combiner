@@ -387,124 +387,129 @@ const TeamsPage = (props: TeamsPageProps) => {
           </Show>
 
           <Show when={!error()}>
-            <Show when={projects().length > 0}>
-              <div class="profile-grid">
-                <For each={projects()}>
-                  {(project) => (
-                    <article class="profile-card profile-card--emphasis">
-                      <header class="profile-item-heading">
-                        <div>
-                          <strong>{project.title}</strong>
-                          <p class="helper-text">{project.description || "No description yet."}</p>
-                        </div>
-                        <span class="small-text">Updated {formatDate(project.updatedAt)}</span>
-                      </header>
-                      <p class="small-text helper-text">Owner: {project.owner}</p>
-                      <p class="small-text">
-                        Members: {project.members.length > 0 ? project.members.join(", ") : "No members yet."}
-                      </p>
-                    </article>
-                  )}
-                </For>
-              </div>
-            </Show>
+            <div class="teams-layout">
+              <div class="teams-layout__projects">
+                <Show when={projects().length > 0}>
+                  <div class="profile-grid">
+                    <For each={projects()}>
+                      {(project) => (
+                        <article class="profile-card profile-card--emphasis">
+                          <header class="profile-item-heading">
+                            <div>
+                              <strong>{project.title}</strong>
+                              <p class="helper-text">{project.description || "No description yet."}</p>
+                            </div>
+                            <span class="small-text">Updated {formatDate(project.updatedAt)}</span>
+                          </header>
+                          <p class="small-text helper-text">Owner: {project.owner}</p>
+                          <p class="small-text">
+                            Members: {project.members.length > 0 ? project.members.join(", ") : "No members yet."}
+                          </p>
+                        </article>
+                      )}
+                    </For>
+                  </div>
+                </Show>
 
-            <Show when={projects().length === 0}>
-              <p class="helper-text">No active teams yet.</p>
-            </Show>
-          </Show>
-        </Show>
-        <article class="profile-card profile-card--emphasis team-chat">
-          <header class="profile-item-heading">
-            <div>
-              <strong>Company chat</strong>
-              <Show when={chatUser()}>
-                <p class="helper-text">
-                  {chatUser()} - {userCompany() ?? "No company assigned yet"}
-                </p>
-              </Show>
-              <Show when={!chatUser()}>
-                <p class="helper-text">Loading chat identity...</p>
-              </Show>
-            </div>
-            <span class="small-text">{chatStatus()}</span>
-          </header>
-          <Show when={profileLoading()}>
-            <p class="helper-text">Refreshing company membership...</p>
-          </Show>
-          <div class="team-chat__messages">
-            <Show when={chatMessages().length > 0}>
-              <For each={chatMessages()}>
-                {(message) => (
-                  <article class="team-chat__message">
-                    <header class="team-chat__message-header">
-                      <strong>{message.sender}</strong>
-                      <span class="small-text">{formatDate(message.createdAt)}</span>
+                <Show when={projects().length === 0}>
+                  <p class="helper-text">No active teams yet.</p>
+                </Show>
+
+                <Show when={userCompany()}>
+                  <article class="profile-card profile-card--emphasis company-members">
+                    <header class="profile-item-heading">
+                      <div>
+                        <strong>Company teammates</strong>
+                        <p class="helper-text">Roster for {userCompany()}</p>
+                      </div>
+                      <span class="small-text">{companyMembers().length} member{companyMembers().length === 1 ? "" : "s"}</span>
                     </header>
-                    <p>{message.text}</p>
+                    <Show when={membersLoading()}>
+                      <p class="helper-text">Loading company members...</p>
+                    </Show>
+                    <Show when={membersError()}>
+                      <p class="helper-text">{membersError()}</p>
+                    </Show>
+                    <Show when={!membersLoading() && !membersError()}>
+                      <Show when={companyMembers().length > 0}>
+                        <ul class="company-members__list">
+                          <For each={companyMembers()}>
+                            {(member) => (
+                              <li class="company-members__item">
+                                <div>
+                                  <strong>{member.username}</strong>
+                                  <p class="helper-text">{formatRoleLabel(member.role)}</p>
+                                </div>
+                                <span class="company-members__role">{formatRoleLabel(member.role)}</span>
+                              </li>
+                            )}
+                          </For>
+                        </ul>
+                      </Show>
+                      <Show when={companyMembers().length === 0}>
+                        <p class="helper-text">No teammates assigned to {userCompany()} yet.</p>
+                      </Show>
+                    </Show>
                   </article>
-                )}
-              </For>
-            </Show>
-            <Show when={chatMessages().length === 0}>
-              <p class="helper-text">No messages yet.</p>
-            </Show>
-          </div>
-          <form class="team-chat__form" onSubmit={handleChatSubmit}>
-            <textarea
-              class="team-chat__input"
-              placeholder="Share quick updates with teammates from your company..."
-              value={chatInput()}
-              onInput={(event) => setChatInput(event.currentTarget.value)}
-              rows={3}
-            />
-            <button class="primary" type="submit" disabled={!canSendChat()}>
-              Send
-            </button>
-          </form>
-          <Show when={chatError()}>
-            <p class="helper-text">{chatError()}</p>
-          </Show>
-          <Show when={!userCompany()}>
-            <p class="helper-text">Join or assign a company to unlock chat posting.</p>
-          </Show>
-        </article>
-        <Show when={userCompany()}>
-          <article class="profile-card profile-card--emphasis company-members">
-            <header class="profile-item-heading">
-              <div>
-                <strong>Company teammates</strong>
-                <p class="helper-text">Roster for {userCompany()}</p>
+                </Show>
               </div>
-              <span class="small-text">{companyMembers().length} member{companyMembers().length === 1 ? "" : "s"}</span>
-            </header>
-            <Show when={membersLoading()}>
-              <p class="helper-text">Loading company members...</p>
-            </Show>
-            <Show when={membersError()}>
-              <p class="helper-text">{membersError()}</p>
-            </Show>
-            <Show when={!membersLoading() && !membersError()}>
-              <Show when={companyMembers().length > 0}>
-                <ul class="company-members__list">
-                  <For each={companyMembers()}>
-                    {(member) => (
-                      <li class="company-members__item">
-                        <div>
-                          <strong>{member.username}</strong>
-                          <p class="helper-text">{formatRoleLabel(member.role)}</p>
-                        </div>
-                        <span class="company-members__role">{formatRoleLabel(member.role)}</span>
-                      </li>
-                    )}
-                  </For>
-                </ul>
-              </Show>
-              <Show when={companyMembers().length === 0}>
-                <p class="helper-text">No teammates assigned to {userCompany()} yet.</p>
-              </Show>
-            </Show>
-          </article>
+              <article class="profile-card profile-card--emphasis team-chat teams-layout__chat">
+                <header class="profile-item-heading">
+                  <div>
+                    <strong>Company chat</strong>
+                    <Show when={chatUser()}>
+                      <p class="helper-text">
+                        {chatUser()} - {userCompany() ?? "No company assigned yet"}
+                      </p>
+                    </Show>
+                    <Show when={!chatUser()}>
+                      <p class="helper-text">Loading chat identity...</p>
+                    </Show>
+                  </div>
+                  <span class="small-text">{chatStatus()}</span>
+                </header>
+                <Show when={profileLoading()}>
+                  <p class="helper-text">Refreshing company membership...</p>
+                </Show>
+                <div class="team-chat__messages">
+                  <Show when={chatMessages().length > 0}>
+                    <For each={chatMessages()}>
+                      {(message) => (
+                        <article class="team-chat__message">
+                          <header class="team-chat__message-header">
+                            <strong>{message.sender}</strong>
+                            <span class="small-text">{formatDate(message.createdAt)}</span>
+                          </header>
+                          <p>{message.text}</p>
+                        </article>
+                      )}
+                    </For>
+                  </Show>
+                  <Show when={chatMessages().length === 0}>
+                    <p class="helper-text">No messages yet.</p>
+                  </Show>
+                </div>
+                <form class="team-chat__form" onSubmit={handleChatSubmit}>
+                  <textarea
+                    class="team-chat__input"
+                    placeholder="Share quick updates with teammates from your company..."
+                    value={chatInput()}
+                    onInput={(event) => setChatInput(event.currentTarget.value)}
+                    rows={3}
+                  />
+                  <button class="primary" type="submit" disabled={!canSendChat()}>
+                    Send
+                  </button>
+                </form>
+                <Show when={chatError()}>
+                  <p class="helper-text">{chatError()}</p>
+                </Show>
+                <Show when={!userCompany()}>
+                  <p class="helper-text">Join or assign a company to unlock chat posting.</p>
+                </Show>
+              </article>
+            </div>
+          </Show>
         </Show>
       </Show>
     </section>

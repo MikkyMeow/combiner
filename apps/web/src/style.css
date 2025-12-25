@@ -243,6 +243,26 @@ label {
   gap: 1rem;
 }
 
+.teams-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+
+.teams-layout__projects {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.teams-layout__chat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 420px;
+}
+
 .team-chat {
   display: flex;
   flex-direction: column;
@@ -489,6 +509,15 @@ label {
 @media (max-width: 1024px) {
   .project-detail-columns {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1024px) {
+  .teams-layout {
+    grid-template-columns: 1fr;
+  }
+  .teams-layout__chat {
+    min-height: auto;
   }
 }
 
