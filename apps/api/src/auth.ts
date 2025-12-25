@@ -43,7 +43,8 @@ const jwtOptions: FastifyJWTOptions = {
 type UserProfile = Pick<UserRecord, "username" | "createdAt" | "updatedAt" | "role" | "company">;
 
 interface UpdateProfileBody {
-  password?: string;
+  currentPassword?: string;
+  newPassword?: string;
 }
 
 const buildProfile = (user: UserRecord): UserProfile => ({
@@ -132,13 +133,21 @@ const authRoutes: FastifyPluginAsync = async (server) => {
         return reply.status(404).send({ message: "User not found" });
       }
 
-      const trimmedPassword = request.body.password?.trim() ?? "";
-      if (!trimmedPassword) {
-        return reply.status(400).send({ message: "Password is required" });
+      const trimmedCurrent = request.body.currentPassword?.trim() ?? "";
+      const trimmedNew = request.body.newPassword?.trim() ?? "";
+      if (!trimmedCurrent) {
+        return reply.status(400).send({ message: "Current password is required" });
+      }
+      if (!trimmedNew) {
+        return reply.status(400).send({ message: "New password is required" });
+      }
+
+      if (trimmedCurrent !== user.password) {
+        return reply.status(401).send({ message: "Current password is incorrect" });
       }
 
       const updatedUser = updateUser(username, {
-        password: trimmedPassword,
+        password: trimmedNew,
         updatedAt: new Date().toISOString()
       });
       if (!updatedUser) {

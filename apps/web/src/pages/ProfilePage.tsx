@@ -72,15 +72,33 @@ const ProfilePage = ({ jwtToken, onNotify }: ProfilePageProps) => {
   const [profile, setProfile] = createSignal<ProfilePayload | null>(null);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
+  const [oldPassword, setOldPassword] = createSignal("");
   const [newPassword, setNewPassword] = createSignal("");
   const [confirmPassword, setConfirmPassword] = createSignal("");
   const [saving, setSaving] = createSignal(false);
   const [updateMessage, setUpdateMessage] = createSignal<string | null>(null);
+  const [isPasswordModalOpen, setPasswordModalOpen] = createSignal(false);
 
   const notify = (message: string, type: NotificationType = "info") => {
     if (message) {
       onNotify?.(message, type);
     }
+  };
+
+  const resetPasswordInputs = () => {
+    setOldPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+  };
+
+  const openPasswordModal = () => {
+    resetPasswordInputs();
+    setPasswordModalOpen(true);
+  };
+
+  const closePasswordModal = () => {
+    setPasswordModalOpen(false);
+    resetPasswordInputs();
   };
 
   const getHeaders = () => {
@@ -121,6 +139,14 @@ const ProfilePage = ({ jwtToken, onNotify }: ProfilePageProps) => {
       return;
     }
 
+    const trimmedCurrent = oldPassword().trim();
+    if (!trimmedCurrent) {
+      const message = "Current password is required.";
+      setError(message);
+      notify(message, "warning");
+      return;
+    }
+
     const trimmedPassword = newPassword().trim();
     if (!trimmedPassword) {
       const message = "New password is required.";
@@ -143,7 +169,10 @@ const ProfilePage = ({ jwtToken, onNotify }: ProfilePageProps) => {
       const response = await fetch(`${apiUrl()}/me`, {
         method: "PATCH",
         headers: getHeaders(),
-        body: JSON.stringify({ password: trimmedPassword })
+        body: JSON.stringify({
+          currentPassword: trimmedCurrent,
+          newPassword: trimmedPassword
+        })
       });
 
       if (!response.ok) {
@@ -153,10 +182,10 @@ const ProfilePage = ({ jwtToken, onNotify }: ProfilePageProps) => {
 
       const payload = (await response.json()) as ProfilePayload;
       setProfile(payload);
-      setNewPassword("");
-      setConfirmPassword("");
+      resetPasswordInputs();
       setUpdateMessage("Password updated successfully.");
       notify("Password updated", "success");
+      closePasswordModal();
     } catch (fetchError) {
       const message = (fetchError as Error).message || "Unable to update profile.";
       setError(message);
@@ -202,42 +231,87 @@ const ProfilePage = ({ jwtToken, onNotify }: ProfilePageProps) => {
       <h1>Profile</h1>
       <p class="helper-text">View your account details, recent tasks, notes, and projects in one place.</p>
 
-      <form class="profile-form" onSubmit={handleUpdateProfile}>
-        <h2 class="profile-form__title">Update password</h2>
-        <div class="profile-form__inputs">
-          <label>
-            New password
-            <input
-              class="text-input"
-              type="password"
-              value={newPassword()}
-              onInput={(event) => setNewPassword(event.currentTarget.value)}
-              required
-              minlength={8}
-            />
-          </label>
-          <label>
-            Confirm password
-            <input
-              class="text-input"
-              type="password"
-              value={confirmPassword()}
-              onInput={(event) => setConfirmPassword(event.currentTarget.value)}
-              required
-              minlength={8}
-            />
-          </label>
+      <div class="profile-form">
+        <div class="profile-form__title-row">
+          <h2 class="profile-form__title">Security</h2>
+          <button
+            type="button"
+            class="ghost profile-form__action"
+            onClick={openPasswordModal}
+          >
+            Change password
+          </button>
         </div>
-        <button class="primary" type="submit" disabled={saving()}>
-          {saving() ? "Updating..." : "Update password"}
-        </button>
+        <p class="helper-text">
+          Keep your account safe by rotating your password. Open the dialog to update it.
+        </p>
         <Show when={updateMessage()}>
           <p class="helper-text">{updateMessage()}</p>
         </Show>
-      </form>
+      </div>
 
       <Show when={error()}>
         <p class="helper-text">{error()}</p>
+      </Show>
+
+      <Show when={isPasswordModalOpen()}>
+        <div
+          class="modal-container"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="password-modal-title"
+          onClick={closePasswordModal}
+        >
+          <div class="modal-backdrop" role="presentation" />
+          <form
+            class="modal-panel"
+            onSubmit={handleUpdateProfile}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="password-modal-title">Change password</h2>
+            <label>
+              Current password
+              <input
+                class="text-input"
+                type="password"
+                value={oldPassword()}
+                onInput={(event) => setOldPassword(event.currentTarget.value)}
+                required
+                minlength={8}
+              />
+            </label>
+            <label>
+              New password
+              <input
+                class="text-input"
+                type="password"
+                value={newPassword()}
+                onInput={(event) => setNewPassword(event.currentTarget.value)}
+                required
+                minlength={8}
+              />
+            </label>
+            <label>
+              Confirm new password
+              <input
+                class="text-input"
+                type="password"
+                value={confirmPassword()}
+                onInput={(event) => setConfirmPassword(event.currentTarget.value)}
+                required
+                minlength={8}
+              />
+            </label>
+            <div class="modal-actions">
+              <button type="button" class="ghost" onClick={closePasswordModal}>
+                Cancel
+              </button>
+              <button class="primary" type="submit" disabled={saving()}>
+                {saving() ? "Updating..." : "Update password"}
+              </button>
+            </div>
+          </form>
+        </div>
       </Show>
 
       <Show when={loading()}>
