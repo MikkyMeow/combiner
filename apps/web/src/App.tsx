@@ -1,4 +1,4 @@
-import { createSignal, createEffect, createMemo, onCleanup, onMount } from "solid-js";
+import { createSignal, createEffect, createMemo, onCleanup, onMount, Show } from "solid-js";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -82,6 +82,9 @@ const App = () => {
   const [page, setPage] = createSignal(window.location.pathname || "/");
   const [jwtToken, setJwtToken] = createSignal<string | null>(initialToken ?? null);
   const [theme, setTheme] = createSignal<"dark" | "light">(getStoredTheme());
+  const [isNavOpen, setNavOpen] = createSignal(false);
+  const closeMobileNav = () => setNavOpen(false);
+  const toggleMobileNav = () => setNavOpen((value) => !value);
   const { notifications, enqueueNotification, dismissNotification } = useNotifications();
 
   const scrollKey = (path: string) => `scroll-position:${path}`;
@@ -131,6 +134,7 @@ const App = () => {
     saveScroll(page());
     window.history.pushState(null, "", target);
     setPage(target);
+    setNavOpen(false);
   };
 
   const onAuthenticated = (token: string) => {
@@ -139,6 +143,7 @@ const App = () => {
   };
 
   const handleLogout = () => {
+    closeMobileNav();
     setJwtToken(null);
     localStorage.removeItem("jwtToken");
     navigate("/login");
@@ -309,8 +314,71 @@ const App = () => {
           >
             {theme() === "dark" ? "Light mode" : "Dark mode"}
           </button>
+          <button
+            type="button"
+            class="burger-button"
+            aria-controls="mobile-navigation"
+            aria-expanded={isNavOpen()}
+            aria-label={isNavOpen() ? "Close navigation menu" : "Open navigation menu"}
+            onClick={toggleMobileNav}
+          >
+            <span class="burger-line" />
+            <span class="burger-line" />
+            <span class="burger-line" />
+          </button>
         </div>
       </nav>
+      <Show when={isNavOpen()}>
+        <div class="mobile-nav-layer">
+          <div class="mobile-nav-backdrop" role="presentation" onClick={closeMobileNav} />
+          <div
+            class="mobile-nav-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Site navigation"
+            id="mobile-navigation"
+          >
+            <div class="mobile-nav-header">
+              <span class="mobile-nav-title">Navigation</span>
+              <button
+                type="button"
+                class="ghost mobile-nav-close"
+                aria-label="Close menu"
+                onClick={closeMobileNav}
+              >
+                Close
+              </button>
+            </div>
+            <div class="mobile-nav-links">
+              {routes().map((route) => (
+                <button
+                  type="button"
+                  class="mobile-nav-link"
+                  onClick={() => navigate(route.path)}
+                >
+                  {route.label}
+                </button>
+              ))}
+              {jwtToken() && (
+                <button
+                  type="button"
+                  class="mobile-nav-link"
+                  onClick={handleLogout}
+                >
+                  Logout
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              class="theme-toggle mobile-theme-toggle"
+              onClick={toggleTheme}
+            >
+              {theme() === "dark" ? "Light mode" : "Dark mode"}
+            </button>
+          </div>
+        </div>
+      </Show>
       <div class="content">{renderPage()}</div>
       <NotificationStack
         notifications={notifications()}

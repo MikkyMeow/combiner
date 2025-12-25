@@ -101,6 +101,36 @@ body {
   color: var(--text-primary);
 }
 
+.burger-button {
+  border: none;
+  background: transparent;
+  width: 2.9rem;
+  height: 2.9rem;
+  border-radius: 999px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.burger-button:hover,
+.burger-button:focus-visible {
+  background: var(--interactive-hover);
+}
+
+.burger-line {
+  display: block;
+  width: 1.75rem;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--text-primary);
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
 .theme-toggle {
   border: 1px solid var(--interactive-border);
   color: var(--text-primary);
@@ -115,6 +145,98 @@ body {
 
 .theme-toggle:hover {
   background: var(--interactive-hover);
+}
+
+.mobile-nav-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.mobile-nav-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.65);
+}
+
+.mobile-nav-panel {
+  position: relative;
+  width: min(280px, 75vw);
+  max-width: 340px;
+  height: 100%;
+  background: var(--surface-card);
+  backdrop-filter: blur(8px);
+  border-left: 1px solid var(--surface-border);
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.4);
+  padding: 1.5rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  z-index: 1;
+}
+
+.mobile-nav-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mobile-nav-title {
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.mobile-nav-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.mobile-nav-link {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-primary);
+  padding: 0.65rem 0.85rem;
+  border-radius: 12px;
+  font-size: 1rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.mobile-nav-link:hover,
+.mobile-nav-link:focus-visible {
+  background: var(--interactive-hover);
+  border-color: var(--accent);
+}
+
+.mobile-nav-close {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.mobile-theme-toggle {
+  width: 100%;
+  justify-content: center;
+}
+
+@media (max-width: 768px) {
+  .nav-actions {
+    display: none;
+  }
+
+  .nav-controls .theme-toggle {
+    display: none;
+  }
+
+  .burger-button {
+    display: inline-flex;
+  }
 }
 
 .content {
