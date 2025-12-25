@@ -33,3 +33,8 @@ export const updateUser = (
   saveDatabase(state);
   return target;
 };
+
+export const listUsersByCompany = (company: string): UserRecord[] => {
+  const state = loadDatabase();
+  return state.users.filter((entry) => entry.company === company);
+};

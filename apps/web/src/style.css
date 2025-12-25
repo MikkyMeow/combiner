@@ -294,6 +294,41 @@ label {
   resize: vertical;
 }
 
+.company-members {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.company-members__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.company-members__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.company-members__item:last-child {
+  border-bottom: none;
+}
+
+.company-members__role {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
 .profile-item-heading {
   display: flex;
   align-items: center;

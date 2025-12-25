@@ -3,9 +3,10 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import authRoutes from "./auth";
 import chatRoutes from "./chat";
-import tasksRoutes from "./tasks";
 import notesRoutes from "./notes";
 import projectsRoutes from "./projects";
+import tasksRoutes from "./tasks";
+import teamsRoutes from "./teams";
 
 const server = Fastify({ logger: true });
 
@@ -20,6 +21,7 @@ const start = async () => {
     await server.register(tasksRoutes);
     await server.register(notesRoutes);
     await server.register(projectsRoutes);
+    await server.register(teamsRoutes);
 
     await server.listen({
       port: 3000,

@@ -22,6 +22,12 @@ type ChatMessage = {
   createdAt: string;
 };
 
+type CompanyMember = {
+  username: string;
+  role: UserRole;
+  company: string | null;
+};
+
 type ChatServerEvent =
   | { type: "history"; messages: ChatMessage[] }
   | { type: "message"; message: ChatMessage }
@@ -40,6 +46,16 @@ type TeamsPageProps = {
 
 const formatDate = (value: string) => new Date(value).toLocaleString();
 
+const formatRoleLabel = (role: UserRole) => {
+  if (role === "owner") {
+    return "Owner";
+  }
+  if (role === "employee") {
+    return "Employee";
+  }
+  return "User";
+};
+
 const TeamsPage = (props: TeamsPageProps) => {
   const [projects, setProjects] = createSignal<Project[]>([]);
   const [loading, setLoading] = createSignal(false);
@@ -53,6 +69,9 @@ const TeamsPage = (props: TeamsPageProps) => {
   const [userCompany, setUserCompany] = createSignal<string | null>(null);
   const [chatUser, setChatUser] = createSignal<string | null>(null);
   const [profileLoading, setProfileLoading] = createSignal(false);
+  const [companyMembers, setCompanyMembers] = createSignal<CompanyMember[]>([]);
+  const [membersLoading, setMembersLoading] = createSignal(false);
+  const [membersError, setMembersError] = createSignal<string | null>(null);
 
   const notify = (message: string, type: NotificationType = "info") => {
     props.onNotify?.(message, type);
@@ -95,8 +114,25 @@ const TeamsPage = (props: TeamsPageProps) => {
     }
     setChatError(message);
     notify(message, "error");
+    setCompanyMembers([]);
+    setMembersError(null);
     setUserCompany(null);
     setChatUser(null);
+  };
+
+  const handleCompanyMembersError = async (response: Response) => {
+    let message = `${response.status} ${response.statusText}`;
+    try {
+      const payload = (await response.json()) as { message?: string };
+      if (payload?.message) {
+        message = payload.message;
+      }
+    } catch {
+      /* ignore */
+    }
+    setMembersError(message);
+    setCompanyMembers([]);
+    notify(message, "error");
   };
 
   const loadTeams = async () => {
@@ -126,6 +162,8 @@ const TeamsPage = (props: TeamsPageProps) => {
     if (!props.jwtToken) {
       setUserCompany(null);
       setChatUser(null);
+      setCompanyMembers([]);
+      setMembersError(null);
       return;
     }
 
@@ -150,6 +188,43 @@ const TeamsPage = (props: TeamsPageProps) => {
       notify(message, "error");
     } finally {
       setProfileLoading(false);
+    }
+  };
+
+  const loadCompanyMembers = async () => {
+    const token = props.jwtToken;
+    if (!token) {
+      setCompanyMembers([]);
+      setMembersError(null);
+      return;
+    }
+
+    const company = userCompany();
+    if (!company) {
+      setCompanyMembers([]);
+      setMembersError(null);
+      return;
+    }
+
+    setMembersLoading(true);
+    setMembersError(null);
+    try {
+      const response = await fetch(`${apiUrl()}/me/company/members`, {
+        headers: getHeaders()
+      });
+      if (!response.ok) {
+        await handleCompanyMembersError(response);
+        return;
+      }
+      const payload = (await response.json()) as { members: CompanyMember[] };
+      setCompanyMembers(payload.members ?? []);
+    } catch (fetchError) {
+      const message = (fetchError as Error).message || "Unable to load company members.";
+      setMembersError(message);
+      setCompanyMembers([]);
+      notify(message, "error");
+    } finally {
+      setMembersLoading(false);
     }
   };
 
@@ -196,6 +271,23 @@ const TeamsPage = (props: TeamsPageProps) => {
 
     void loadTeams();
     void loadProfile();
+  });
+
+  createEffect(() => {
+    const token = props.jwtToken;
+    if (!allowed() || !token) {
+      setCompanyMembers([]);
+      setMembersError(null);
+      return;
+    }
+
+    if (!userCompany()) {
+      setCompanyMembers([]);
+      setMembersError(null);
+      return;
+    }
+
+    void loadCompanyMembers();
   });
 
   createEffect(() => {
@@ -377,6 +469,43 @@ const TeamsPage = (props: TeamsPageProps) => {
             <p class="helper-text">Join or assign a company to unlock chat posting.</p>
           </Show>
         </article>
+        <Show when={userCompany()}>
+          <article class="profile-card profile-card--emphasis company-members">
+            <header class="profile-item-heading">
+              <div>
+                <strong>Company teammates</strong>
+                <p class="helper-text">Roster for {userCompany()}</p>
+              </div>
+              <span class="small-text">{companyMembers().length} member{companyMembers().length === 1 ? "" : "s"}</span>
+            </header>
+            <Show when={membersLoading()}>
+              <p class="helper-text">Loading company members...</p>
+            </Show>
+            <Show when={membersError()}>
+              <p class="helper-text">{membersError()}</p>
+            </Show>
+            <Show when={!membersLoading() && !membersError()}>
+              <Show when={companyMembers().length > 0}>
+                <ul class="company-members__list">
+                  <For each={companyMembers()}>
+                    {(member) => (
+                      <li class="company-members__item">
+                        <div>
+                          <strong>{member.username}</strong>
+                          <p class="helper-text">{formatRoleLabel(member.role)}</p>
+                        </div>
+                        <span class="company-members__role">{formatRoleLabel(member.role)}</span>
+                      </li>
+                    )}
+                  </For>
+                </ul>
+              </Show>
+              <Show when={companyMembers().length === 0}>
+                <p class="helper-text">No teammates assigned to {userCompany()} yet.</p>
+              </Show>
+            </Show>
+          </article>
+        </Show>
       </Show>
     </section>
   );
