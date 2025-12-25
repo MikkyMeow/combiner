@@ -47,6 +47,10 @@ interface UpdateProfileBody {
   newPassword?: string;
 }
 
+interface CreateCompanyBody {
+  name?: string;
+}
+
 const buildProfile = (user: UserRecord): UserProfile => ({
   username: user.username,
   createdAt: user.createdAt,
@@ -150,6 +154,51 @@ const authRoutes: FastifyPluginAsync = async (server) => {
         password: trimmedNew,
         updatedAt: new Date().toISOString()
       });
+      if (!updatedUser) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      const token = await reply.jwtSign({ username, role: updatedUser.role });
+      return {
+        user: buildProfile(updatedUser),
+        tasks: listTasks(username),
+        notes: listNotes(username),
+        projects: listProjects(username),
+        token
+      };
+    }
+  );
+
+  server.post<{ Body: CreateCompanyBody }>(
+    "/me/company",
+    { preValidation: [server.authenticate] },
+    async (request, reply) => {
+      const username = request.user?.username;
+      if (!username) {
+        return reply.status(401).send({ message: "Invalid token" });
+      }
+
+      const user = findUserByUsername(username);
+      if (!user) {
+        return reply.status(404).send({ message: "User not found" });
+      }
+
+      if (user.company) {
+        return reply.status(400).send({ message: "Company already assigned" });
+      }
+
+      const trimmedName = request.body.name?.trim() ?? "";
+      if (!trimmedName) {
+        return reply.status(400).send({ message: "Company name is required" });
+      }
+
+      const now = new Date().toISOString();
+      const updatedUser = updateUser(username, {
+        company: trimmedName,
+        role: "owner",
+        updatedAt: now
+      });
+
       if (!updatedUser) {
         return reply.status(404).send({ message: "User not found" });
       }

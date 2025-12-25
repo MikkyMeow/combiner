@@ -58,6 +58,7 @@ type ProfilePayload = {
 type ProfilePageProps = {
   jwtToken: string | null;
   onNotify?: (message: string, type?: NotificationType) => void;
+  onTokenRefresh?: (token: string) => void;
 };
 
 const formatDate = (value: string) => new Date(value).toLocaleString();
@@ -68,7 +69,7 @@ const notePreview = (note: Note) => {
   return trimmed.length > 40 ? `${trimmed.slice(0, 40)}…` : trimmed;
 };
 
-const ProfilePage = ({ jwtToken, onNotify }: ProfilePageProps) => {
+const ProfilePage = ({ jwtToken, onNotify, onTokenRefresh }: ProfilePageProps) => {
   const [profile, setProfile] = createSignal<ProfilePayload | null>(null);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
@@ -78,6 +79,10 @@ const ProfilePage = ({ jwtToken, onNotify }: ProfilePageProps) => {
   const [saving, setSaving] = createSignal(false);
   const [updateMessage, setUpdateMessage] = createSignal<string | null>(null);
   const [isPasswordModalOpen, setPasswordModalOpen] = createSignal(false);
+  const [companyName, setCompanyName] = createSignal("");
+  const [companyError, setCompanyError] = createSignal<string | null>(null);
+  const [companySuccess, setCompanySuccess] = createSignal<string | null>(null);
+  const [companyCreating, setCompanyCreating] = createSignal(false);
 
   const notify = (message: string, type: NotificationType = "info") => {
     if (message) {
@@ -194,14 +199,68 @@ const ProfilePage = ({ jwtToken, onNotify }: ProfilePageProps) => {
       setSaving(false);
     }
   };
+  
+  const handleCreateCompany = async (event: SubmitEvent) => {
+    event.preventDefault();
+    const trimmedName = companyName().trim();
+    if (!trimmedName) {
+      const message = "Company name is required.";
+      setCompanyError(message);
+      setCompanySuccess(null);
+      return;
+    }
 
-  const fetchProfile = async () => {
     if (!jwtToken) {
       handleUnauthorized();
       return;
     }
 
-    setLoading(true);
+    setCompanyCreating(true);
+    setCompanyError(null);
+    setCompanySuccess(null);
+    try {
+      const response = await fetch(`${apiUrl()}/me/company`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({ name: trimmedName })
+      });
+      const payload = (await response.json()) as ProfilePayload & { token?: string; message?: string };
+
+      if (!response.ok) {
+        const message = payload?.message ?? "Unable to create company.";
+        setCompanyError(message);
+        notify(message, "error");
+        return;
+      }
+
+      const { token, ...profilePayload } = payload;
+      if (token && onTokenRefresh) {
+        onTokenRefresh(token);
+      }
+      setProfile(profilePayload as ProfilePayload);
+      const successMessage = `Company "${trimmedName}" created. You are now the owner.`;
+      setCompanySuccess(successMessage);
+      setCompanyName("");
+      notify(successMessage, "success");
+    } catch (fetchError) {
+      const message = (fetchError as Error).message || "Unable to create company.";
+      setCompanyError(message);
+      notify(message, "error");
+    } finally {
+      setCompanyCreating(false);
+    }
+  };
+
+  const fetchProfile = async (options?: { showLoading?: boolean }) => {
+    const showLoading = options?.showLoading ?? true;
+    if (!jwtToken) {
+      handleUnauthorized();
+      return;
+    }
+
+    if (showLoading) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const response = await fetch(`${apiUrl()}/me`, {
@@ -218,7 +277,9 @@ const ProfilePage = ({ jwtToken, onNotify }: ProfilePageProps) => {
       setError(message);
       notify(message, "error");
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   };
 
@@ -363,6 +424,48 @@ const ProfilePage = ({ jwtToken, onNotify }: ProfilePageProps) => {
                 </div>
               </div>
               <div class="profile-grid">
+                <Show when={data.user.role === "user" && !data.user.company}>
+                  <article class="profile-card profile-card--emphasis">
+                    <h2>Create your company</h2>
+                    <p class="helper-text">
+                      Give your future teammates a place to collaborate. You will become the owner of the company you create.
+                    </p>
+                    <form class="profile-form" onSubmit={handleCreateCompany}>
+                      <label>
+                        Company name
+                        <input
+                          class="text-input"
+                          value={companyName()}
+                          onInput={(event) => {
+                            const value = event.currentTarget.value;
+                            setCompanyName(value);
+                            if (companyError()) {
+                              setCompanyError(null);
+                            }
+                            if (companySuccess()) {
+                              setCompanySuccess(null);
+                            }
+                          }}
+                          placeholder="e.g. Nova Labs"
+                          required
+                          minlength={3}
+                          disabled={companyCreating()}
+                        />
+                      </label>
+                      <div class="modal-actions">
+                        <button class="primary" type="submit" disabled={companyCreating()}>
+                          {companyCreating() ? "Creating..." : "Create company"}
+                        </button>
+                      </div>
+                      <Show when={companyError()}>
+                        <p class="helper-text">{companyError()}</p>
+                      </Show>
+                      <Show when={companySuccess()}>
+                        <p class="helper-text">{companySuccess()}</p>
+                      </Show>
+                    </form>
+                  </article>
+                </Show>
                 <article class="profile-card profile-card--emphasis">
                   <h2>Recent tasks ({data.tasks.length})</h2>
                   <Show when={data.tasks.length > 0}>

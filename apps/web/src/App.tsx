@@ -141,6 +141,9 @@ const App = () => {
     setJwtToken(token);
     navigate("/projects");
   };
+  const handleTokenRefresh = (token: string) => {
+    setJwtToken(token);
+  };
 
   const handleLogout = () => {
     closeMobileNav();
@@ -262,6 +265,7 @@ const App = () => {
           <ProfilePage
             jwtToken={jwtToken()}
             onNotify={enqueueNotification}
+            onTokenRefresh={handleTokenRefresh}
           />
         );
       case "/projects":

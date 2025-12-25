@@ -15,9 +15,16 @@ export const createUser = (user: UserRecord): void => {
   saveDatabase(state);
 };
 
+export type UpdateUserPayload = {
+  password?: string;
+  company?: string | null;
+  role?: UserRole;
+  updatedAt: string;
+};
+
 export const updateUser = (
   username: string,
-  payload: { password?: string; updatedAt: string }
+  payload: UpdateUserPayload
 ): UserRecord | null => {
   const state = loadDatabase();
   const target = state.users.find((entry) => entry.username === username);
@@ -27,6 +34,12 @@ export const updateUser = (
 
   if (payload.password !== undefined) {
     target.password = payload.password;
+  }
+  if (payload.company !== undefined) {
+    target.company = payload.company;
+  }
+  if (payload.role !== undefined) {
+    target.role = payload.role;
   }
   target.updatedAt = payload.updatedAt;
 
