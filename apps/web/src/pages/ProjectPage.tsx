@@ -1,5 +1,6 @@
 import { createEffect, createSignal, For, Show } from "solid-js";
 import type { NotificationType } from "../components/notifications/useNotifications";
+import type { Project } from "../types/project";
 
 const apiUrl = () => import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
@@ -12,16 +13,6 @@ type Task = {
   updatedAt: string;
   projectId: string | null;
   createdBy: string;
-};
-
-type Project = {
-  id: string;
-  title: string;
-  description: string;
-  createdAt: string;
-  updatedAt: string;
-  owner: string;
-  members: string[];
 };
 
 type Note = {
@@ -426,6 +417,11 @@ const ProjectPage = (props: ProjectPageProps) => {
             <p class="table-description">
               {project()?.description || "No description provided."}
             </p>
+            <Show when={project()}>
+              <p class="helper-text">
+                Scope: {project()?.visibility === "corporate" ? "Corporate" : "Private"}
+              </p>
+            </Show>
           </div>
         </div>
 

@@ -1,14 +1,4 @@
-import { loadDatabase, saveDatabase } from "./db";
-
-type ProjectRow = {
-  id: string;
-  username: string;
-  title: string;
-  description: string;
-  createdAt: string;
-  updatedAt: string;
-  members: string[];
-};
+import { loadDatabase, saveDatabase, type ProjectRow } from "./db";
 
 export type ProjectRecord = {
   id: string;
@@ -18,6 +8,7 @@ export type ProjectRecord = {
   updatedAt: string;
   owner: string;
   members: string[];
+  visibility: "private" | "corporate";
 };
 
 const mapRow = (row: ProjectRow): ProjectRecord => ({
@@ -27,7 +18,8 @@ const mapRow = (row: ProjectRow): ProjectRecord => ({
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
   owner: row.username,
-  members: [...row.members]
+  members: [...row.members],
+  visibility: row.visibility
 });
 
 const userHasAccessToRow = (username: string, row: ProjectRow): boolean =>

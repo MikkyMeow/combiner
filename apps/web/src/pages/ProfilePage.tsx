@@ -1,5 +1,6 @@
 import { createSignal, For, Show, onMount } from "solid-js";
 import type { NotificationType } from "../components/notifications/useNotifications";
+import type { Project } from "../types/project";
 
 const apiUrl = () => import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
@@ -36,16 +37,6 @@ type Note = {
   projectId: string | null;
   createdAt: string;
   updatedAt: string;
-};
-
-type Project = {
-  id: string;
-  title: string;
-  description: string;
-  createdAt: string;
-  updatedAt: string;
-  owner: string;
-  members: string[];
 };
 
 type ProfilePayload = {
@@ -528,7 +519,8 @@ const ProfilePage = ({ jwtToken, onNotify, onTokenRefresh }: ProfilePageProps) =
                           <li>
                             <strong>{project.title}</strong>
                             <p class="small-text">
-                              Owner {project.owner} · {project.members.length} members
+                              Owner {project.owner} · {project.members.length} members · Scope:{" "}
+                              {project.visibility === "corporate" ? "Corporate" : "Private"}
                             </p>
                           </li>
                         )}

@@ -27,6 +27,7 @@ export type ProjectRow = {
   createdAt: string;
   updatedAt: string;
   members: string[];
+  visibility: "private" | "corporate";
 };
 
 export type TaskRow = {
@@ -68,8 +69,9 @@ type RawUserRow = {
   company?: string | null;
 };
 
-type RawProjectRow = Omit<ProjectRow, "members"> & {
+type RawProjectRow = Omit<ProjectRow, "members" | "visibility"> & {
   members?: string[];
+  visibility?: "private" | "corporate";
 };
 
 type RawTaskRow = Omit<TaskRow, "createdBy"> & {
@@ -108,7 +110,8 @@ const normalizeState = (payload: RawDatabaseState): DatabaseState => ({
   })),
   projects: (payload.projects ?? []).map((project) => ({
     ...project,
-    members: project.members ?? []
+    members: project.members ?? [],
+    visibility: project.visibility === "corporate" ? "corporate" : "private"
   })),
   tasks: (payload.tasks ?? []).map((task) => ({
     ...task,
@@ -129,7 +132,8 @@ export const loadDatabase = (): DatabaseState => {
     parsed.notes === undefined ||
     (parsed.users ?? []).some(
       (user) => user.role === undefined || user.company === undefined
-    );
+    ) ||
+    (parsed.projects ?? []).some((project) => project.visibility === undefined);
   if (needsSchemaUpdate) {
     saveDatabase(normalized);
   }

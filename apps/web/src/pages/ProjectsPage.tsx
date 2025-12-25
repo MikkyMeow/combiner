@@ -1,25 +1,18 @@
 import { createSignal, For, Show, onMount } from "solid-js";
 import type { NotificationType } from "../components/notifications/useNotifications";
+import type { UserRole } from "../types/user";
+import type { Project, ProjectVisibility } from "../types/project";
 
 const apiUrl = () => import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
-type Project = {
-  id: string;
-  title: string;
-  description: string;
-  createdAt: string;
-  updatedAt: string;
-  owner: string;
-  members: string[];
-};
-
 type ProjectsPageProps = {
   jwtToken: string | null;
+  userRole?: UserRole | null;
   onNotify?: (message: string, type?: NotificationType) => void;
   onNavigate?: (path: string) => void;
 };
 
-const ProjectsPage = ({ jwtToken, onNotify, onNavigate }: ProjectsPageProps) => {
+const ProjectsPage = ({ jwtToken, userRole, onNotify, onNavigate }: ProjectsPageProps) => {
   const [projects, setProjects] = createSignal<Project[]>([]);
   const [loading, setLoading] = createSignal(false);
   const [creating, setCreating] = createSignal(false);
@@ -27,6 +20,13 @@ const ProjectsPage = ({ jwtToken, onNotify, onNavigate }: ProjectsPageProps) => 
   const [newTitle, setNewTitle] = createSignal("");
   const [newDescription, setNewDescription] = createSignal("");
   const [isCreateModalOpen, setCreateModalOpen] = createSignal(false);
+  const [visibility, setVisibility] = createSignal<ProjectVisibility>("private");
+
+  const isUserRole = () => userRole === "user";
+  const visibilityHint = () =>
+    isUserRole()
+      ? "Corporate projects are reserved for owners and employees."
+      : "Choose private for personal work or corporate for team initiatives.";
 
   const notify = (message: string, type: NotificationType = "info") => {
     onNotify?.(message, type);
@@ -100,6 +100,7 @@ const ProjectsPage = ({ jwtToken, onNotify, onNavigate }: ProjectsPageProps) => 
   const resetCreateForm = () => {
     setNewTitle("");
     setNewDescription("");
+    setVisibility("private");
   };
 
   const openCreateModal = () => {
@@ -108,8 +109,8 @@ const ProjectsPage = ({ jwtToken, onNotify, onNavigate }: ProjectsPageProps) => 
     setCreateModalOpen(true);
   };
 
-  const closeCreateModal = () => {
-    if (creating()) return;
+  const closeCreateModal = (force = false) => {
+    if (!force && creating()) return;
     setCreateModalOpen(false);
     resetCreateForm();
   };
@@ -137,7 +138,8 @@ const ProjectsPage = ({ jwtToken, onNotify, onNavigate }: ProjectsPageProps) => 
         headers: getHeaders(),
         body: JSON.stringify({
           title,
-          description: newDescription().trim()
+          description: newDescription().trim(),
+          visibility: isUserRole() ? "private" : visibility()
         })
       });
 
@@ -149,7 +151,7 @@ const ProjectsPage = ({ jwtToken, onNotify, onNavigate }: ProjectsPageProps) => 
       const createdProject = (await response.json()) as Project;
       setProjects((current) => [createdProject, ...current]);
       notify("Project created", "success");
-      closeCreateModal();
+      closeCreateModal(true);
     } catch (fetchError) {
       const message = (fetchError as Error).message || "Unable to create project.";
       setError(message);
@@ -199,6 +201,9 @@ const ProjectsPage = ({ jwtToken, onNotify, onNavigate }: ProjectsPageProps) => 
                   <p class="project-description">
                     {project.description || "No description provided."}
                   </p>
+                  <p class="helper-text">
+                    {project.visibility === "corporate" ? "Corporate project" : "Private project"}
+                  </p>
                 </div>
                 <span class="project-updated">
                   Updated {new Date(project.updatedAt).toLocaleString()}
@@ -234,6 +239,33 @@ const ProjectsPage = ({ jwtToken, onNotify, onNavigate }: ProjectsPageProps) => 
                   rows={3}
                   placeholder="More details about what needs to be done"
                 />
+              </label>
+              <label class="projects-visibility">
+                Scope
+                <div class="projects-visibility__options">
+                  <label>
+                    <input
+                      type="radio"
+                      name="project-visibility"
+                      value="private"
+                      checked={visibility() === "private"}
+                      onInput={() => setVisibility("private")}
+                    />
+                    <span>Private</span>
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="project-visibility"
+                      value="corporate"
+                      checked={visibility() === "corporate"}
+                      onInput={() => setVisibility("corporate")}
+                      disabled={isUserRole()}
+                    />
+                    <span>Corporate</span>
+                  </label>
+                </div>
+                <p class="helper-text">{visibilityHint()}</p>
               </label>
               <div class="edit-actions">
                 <button type="button" class="ghost" onClick={closeCreateModal} disabled={creating()}>

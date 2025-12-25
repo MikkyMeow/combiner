@@ -268,14 +268,15 @@ const App = () => {
             onTokenRefresh={handleTokenRefresh}
           />
         );
-      case "/projects":
-        return (
-          <ProjectsPage
-            jwtToken={jwtToken()}
-            onNotify={enqueueNotification}
-            onNavigate={navigate}
-          />
-        );
+        case "/projects":
+          return (
+            <ProjectsPage
+              jwtToken={jwtToken()}
+              userRole={userRole()}
+              onNotify={enqueueNotification}
+              onNavigate={navigate}
+            />
+          );
       case "/teams":
         return (
           <TeamsPage

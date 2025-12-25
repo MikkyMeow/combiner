@@ -12,14 +12,22 @@ import {
 } from "./projectsStore";
 import { findTasksForProject } from "./tasksStore";
 import { findNotesForProject } from "./notesStore";
-import { findUserByUsername } from "./usersStore";
+import { findUserByUsername, type UserRole } from "./usersStore";
+
+type ProjectVisibility = ProjectRecord["visibility"];
 
 type ProjectCreateBody = {
   title: string;
   description?: string;
+  visibility: ProjectVisibility;
 };
 
 type ProjectUpdateBody = Partial<ProjectCreateBody>;
+
+type AuthenticatedUser = {
+  username: string;
+  role: UserRole;
+};
 
 const projectsRoutes: FastifyPluginAsync = async (server) => {
   const ensureAuthenticated = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -29,20 +37,35 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
     await server.authenticate(request, reply);
   };
 
-  const requireUser = (request: FastifyRequest, reply: FastifyReply) => {
+  const requireUser = (
+    request: FastifyRequest,
+    reply: FastifyReply
+  ): AuthenticatedUser | null => {
     const username = request.user?.username;
-    if (!username) {
+    const role = request.user?.role;
+    if (!username || !role) {
       reply.status(401).send({ message: "Invalid token" });
       return null;
     }
-    return username;
+    return { username, role };
+  };
+
+  const parseVisibility = (value: string | undefined): ProjectVisibility | null => {
+    if (!value) {
+      return null;
+    }
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "private" || normalized === "corporate") {
+      return normalized as ProjectVisibility;
+    }
+    return null;
   };
 
   server.get("/projects", { preValidation: [ensureAuthenticated] }, async (request, reply) => {
-    const username = requireUser(request, reply);
-    if (!username) return;
+    const authUser = requireUser(request, reply);
+    if (!authUser) return;
 
-    const projects = listProjects(username);
+    const projects = listProjects(authUser.username);
     return { projects };
   });
 
@@ -50,10 +73,10 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
     "/projects/:id",
     { preValidation: [ensureAuthenticated] },
     async (request, reply) => {
-      const username = requireUser(request, reply);
-      if (!username) return;
+      const authUser = requireUser(request, reply);
+      if (!authUser) return;
 
-      const project = findProjectForUser(username, request.params.id);
+      const project = findProjectForUser(authUser.username, request.params.id);
       if (!project) {
         return reply.status(404).send({ message: "Project not found" });
       }
@@ -68,12 +91,17 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
     "/projects",
     { preValidation: [ensureAuthenticated] },
     async (request, reply) => {
-      const username = requireUser(request, reply);
-      if (!username) return;
+      const authUser = requireUser(request, reply);
+      if (!authUser) return;
 
       const trimmedTitle = request.body.title?.trim();
       if (!trimmedTitle) {
         return reply.status(400).send({ message: "Title is required" });
+      }
+
+      const requestedVisibility = parseVisibility(request.body.visibility);
+      if (!requestedVisibility) {
+        return reply.status(400).send({ message: "Project visibility is required" });
       }
 
       const now = new Date().toISOString();
@@ -83,11 +111,12 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
         description: request.body.description?.trim() ?? "",
         createdAt: now,
         updatedAt: now,
-        owner: username,
-        members: []
+        owner: authUser.username,
+        members: [],
+        visibility: authUser.role === "user" ? "private" : requestedVisibility
       };
 
-      return insertProject(username, newProject);
+      return insertProject(authUser.username, newProject);
     }
   );
 
@@ -95,10 +124,10 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
     "/projects/:id",
     { preValidation: [ensureAuthenticated] },
     async (request, reply) => {
-      const username = requireUser(request, reply);
-      if (!username) return;
+      const authUser = requireUser(request, reply);
+      if (!authUser) return;
 
-      const target = findProjectForUser(username, request.params.id);
+      const target = findProjectForUser(authUser.username, request.params.id);
       if (!target) {
         return reply.status(404).send({ message: "Project not found" });
       }
@@ -133,15 +162,15 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
     "/projects/:id/members",
     { preValidation: [ensureAuthenticated] },
     async (request, reply) => {
-      const username = requireUser(request, reply);
-      if (!username) return;
+      const authUser = requireUser(request, reply);
+      if (!authUser) return;
 
       const project = findProjectById(request.params.id);
       if (!project) {
         return reply.status(404).send({ message: "Project not found" });
       }
 
-      if (project.owner !== username) {
+      if (project.owner !== authUser.username) {
         return reply.status(403).send({ message: "Only the project owner can invite members" });
       }
 
@@ -150,7 +179,7 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
         return reply.status(400).send({ message: "Username is required" });
       }
 
-      if (invitee === username) {
+      if (invitee === authUser.username) {
         return reply.status(400).send({ message: "Cannot invite yourself" });
       }
 
@@ -172,11 +201,11 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
     "/projects/:id",
     { preValidation: [ensureAuthenticated] },
     async (request, reply) => {
-      const username = requireUser(request, reply);
-      if (!username) return;
+      const authUser = requireUser(request, reply);
+      if (!authUser) return;
 
-      const project = findProjectForUser(username, request.params.id);
-      if (!project || project.owner !== username) {
+      const project = findProjectForUser(authUser.username, request.params.id);
+      if (!project || project.owner !== authUser.username) {
         return reply.status(404).send({ message: "Project not found" });
       }
       const deleted = deleteProject(request.params.id);

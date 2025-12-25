@@ -1,18 +1,9 @@
 import { createEffect, createSignal, For, Show, onCleanup } from "solid-js";
 import type { NotificationType } from "../components/notifications/useNotifications";
 import type { UserRole } from "../types/user";
+import type { Project } from "../types/project";
 
 const apiUrl = () => import.meta.env.VITE_API_URL ?? "http://localhost:3000";
-
-type Project = {
-  id: string;
-  title: string;
-  description: string;
-  owner: string;
-  members: string[];
-  createdAt: string;
-  updatedAt: string;
-};
 
 type ChatMessage = {
   id: string;
@@ -404,6 +395,9 @@ const TeamsPage = (props: TeamsPageProps) => {
                           <p class="small-text helper-text">Owner: {project.owner}</p>
                           <p class="small-text">
                             Members: {project.members.length > 0 ? project.members.join(", ") : "No members yet."}
+                          </p>
+                          <p class="small-text">
+                            Scope: {project.visibility === "corporate" ? "Corporate" : "Private"}
                           </p>
                         </article>
                       )}
