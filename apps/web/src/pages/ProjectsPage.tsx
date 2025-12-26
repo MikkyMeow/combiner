@@ -5,6 +5,9 @@ import type { Project, ProjectVisibility } from "../types/project";
 
 const apiUrl = () => import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
+type SortField = "title" | "visibility";
+type SortOrder = "asc" | "desc";
+
 type ProjectsPageProps = {
   jwtToken: string | null;
   userRole: UserRole;
@@ -28,6 +31,8 @@ const ProjectsPage = ({
   const [newDescription, setNewDescription] = createSignal("");
   const [searchTerm, setSearchTerm] = createSignal("");
   const [visibilityFilters, setVisibilityFilters] = createSignal<Project["visibility"][]>([]);
+  const [sortField, setSortField] = createSignal<SortField | null>(null);
+  const [sortOrder, setSortOrder] = createSignal<SortOrder>("asc");
   const [isCreateModalOpen, setCreateModalOpen] = createSignal(false);
   const [visibility, setVisibility] = createSignal<ProjectVisibility>("private");
 
@@ -77,7 +82,12 @@ const ProjectsPage = ({
     notify(message, "error");
   };
 
-  const fetchProjects = async (search?: string, filters?: Project["visibility"][]) => {
+  const fetchProjects = async (
+    search?: string,
+    filters?: Project["visibility"][],
+    field?: SortField | null,
+    order?: SortOrder
+  ) => {
     if (!jwtToken) {
       handleUnauthorized();
       return;
@@ -93,6 +103,10 @@ const ProjectsPage = ({
       }
       if (filters?.length) {
         filters.forEach((value) => url.searchParams.append("visibility", value));
+      }
+      if (field) {
+        url.searchParams.set("sort_by", field);
+        url.searchParams.set("order", order ?? "asc");
       }
 
       const response = await fetch(url.toString(), {
@@ -117,12 +131,17 @@ const ProjectsPage = ({
 
   let searchDebounce: ReturnType<typeof setTimeout> | undefined;
 
-  const scheduleFetch = (searchValue: string, filters: Project["visibility"][]) => {
+  const scheduleFetch = (
+    searchValue: string,
+    filters: Project["visibility"][],
+    field: SortField | null,
+    order: SortOrder
+  ) => {
     if (searchDebounce) {
       clearTimeout(searchDebounce);
     }
     searchDebounce = setTimeout(() => {
-      void fetchProjects(searchValue, filters);
+      void fetchProjects(searchValue, filters, field, order);
       searchDebounce = undefined;
     }, 300);
   };
@@ -130,7 +149,7 @@ const ProjectsPage = ({
   const handleSearchInput = (event: InputEvent) => {
     const value = event.currentTarget.value;
     setSearchTerm(value);
-    scheduleFetch(value, visibilityFilters());
+    scheduleFetch(value, visibilityFilters(), sortField(), sortOrder());
   };
 
   const handleClearSearch = () => {
@@ -142,19 +161,32 @@ const ProjectsPage = ({
       searchDebounce = undefined;
     }
     setSearchTerm("");
-    void fetchProjects("", visibilityFilters());
+    void fetchProjects("", visibilityFilters(), sortField(), sortOrder());
   };
 
   const toggleVisibilityFilter = (value: Project["visibility"]) => {
     setVisibilityFilters((current) => {
       const next = current.includes(value) ? current.filter((item) => item !== value) : [...current, value];
-      scheduleFetch(searchTerm(), next);
+      scheduleFetch(searchTerm(), next, sortField(), sortOrder());
       return next;
     });
   };
 
+  const handleSortFieldChange = (event: InputEvent) => {
+    const value = event.currentTarget.value;
+    const field = value ? (value as SortField) : null;
+    setSortField(field);
+    scheduleFetch(searchTerm(), visibilityFilters(), field, sortOrder());
+  };
+
+  const handleSortOrderChange = (event: InputEvent) => {
+    const value = event.currentTarget.value as SortOrder;
+    setSortOrder(value);
+    scheduleFetch(searchTerm(), visibilityFilters(), sortField(), value);
+  };
+
   onMount(() => {
-    void fetchProjects();
+    void fetchProjects("", visibilityFilters(), sortField(), sortOrder());
   });
 
   const resetCreateForm = () => {
@@ -267,6 +299,21 @@ const ProjectsPage = ({
               onInput={() => toggleVisibilityFilter("corporate")}
             />
             <span>Corporate</span>
+          </label>
+          <label class="projects-search__filter projects-search__filter--select">
+            <span>Sort by</span>
+            <select value={sortField() ?? ""} onInput={handleSortFieldChange}>
+              <option value="">Default (created at)</option>
+              <option value="title">Name</option>
+              <option value="visibility">Visibility</option>
+            </select>
+          </label>
+          <label class="projects-search__filter projects-search__filter--select">
+            <span>Order</span>
+            <select value={sortOrder()} onInput={handleSortOrderChange} disabled={!sortField()}>
+              <option value="asc">Ascending</option>
+              <option value="desc">Descending</option>
+            </select>
           </label>
         </div>
       </form>

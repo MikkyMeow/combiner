@@ -8,6 +8,8 @@ import {
   insertProject,
   listProjects,
   type ProjectRecord,
+  type ProjectSortField,
+  type ProjectSortOrder,
   updateProject
 } from "./projectsStore";
 import { findTasksForProject } from "./tasksStore";
@@ -15,6 +17,8 @@ import { findNotesForProject } from "./notesStore";
 import { findUserByUsername, type UserRole } from "./usersStore";
 
 type ProjectVisibility = ProjectRecord["visibility"];
+type ProjectSortFieldValue = ProjectSortField;
+type ProjectSortOrderValue = ProjectSortOrder;
 
 type ProjectCreateBody = {
   title: string;
@@ -61,7 +65,36 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
     return null;
   };
 
-  server.get<{ Querystring: { search?: string; visibility?: string | string[] } }>(
+  const parseSortField = (value: string | undefined): ProjectSortFieldValue | null => {
+    if (!value) {
+      return null;
+    }
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "title" || normalized === "visibility") {
+      return normalized as ProjectSortFieldValue;
+    }
+    return null;
+  };
+
+  const parseSortOrder = (value: string | undefined): ProjectSortOrderValue | null => {
+    if (!value) {
+      return null;
+    }
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "asc" || normalized === "desc") {
+      return normalized as ProjectSortOrderValue;
+    }
+    return null;
+  };
+
+  server.get<{
+    Querystring: {
+      search?: string;
+      visibility?: string | string[];
+      sort_by?: string;
+      order?: string;
+    };
+  }>(
     "/projects",
     { preValidation: [ensureAuthenticated] },
     async (request, reply) => {
@@ -77,10 +110,14 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
           .filter((entry): entry is ProjectVisibility => !!entry);
         return parsed.length ? parsed : undefined;
       })();
+      const sortField = parseSortField(request.query.sort_by);
+      const sortOrder = sortField ? parseSortOrder(request.query.order) ?? "asc" : undefined;
       const projects = listProjects(
         authUser.username,
         normalizedSearch?.length ? normalizedSearch : undefined,
-        requestedVisibilities
+        requestedVisibilities,
+        sortField,
+        sortOrder
       );
       return { projects };
     }

@@ -650,6 +650,26 @@ label {
   accent-color: var(--accent);
 }
 
+.projects-search__filter--select {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.projects-search__filter--select select {
+  padding: 0.4rem 0.75rem;
+  border-radius: 12px;
+  border: 1px solid rgba(248, 250, 252, 0.25);
+  background: var(--surface-muted);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.projects-search__filter--select select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .projects-card-header h1 {
   margin: 0;
 }

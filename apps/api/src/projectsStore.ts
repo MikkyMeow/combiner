@@ -11,6 +11,9 @@ export type ProjectRecord = {
   visibility: "private" | "corporate";
 };
 
+export type ProjectSortField = "title" | "visibility";
+export type ProjectSortOrder = "asc" | "desc";
+
 const mapRow = (row: ProjectRow): ProjectRecord => ({
   id: row.id,
   title: row.title,
@@ -28,11 +31,13 @@ const userHasAccessToRow = (username: string, row: ProjectRow): boolean =>
 export const listProjects = (
   username: string,
   search?: string,
-  visibility?: ProjectRecord["visibility"][]
+  visibility?: ProjectRecord["visibility"][],
+  sortField?: ProjectSortField | null,
+  sortOrder?: ProjectSortOrder
 ): ProjectRecord[] => {
   const state = loadDatabase();
   const normalizedSearch = search?.trim().toLowerCase();
-  return state.projects
+  const filtered = state.projects
     .filter((project) => userHasAccessToRow(username, project))
     .filter((project) => {
       if (!visibility || visibility.length === 0) {
@@ -47,9 +52,23 @@ export const listProjects = (
       const title = project.title.toLowerCase();
       const description = project.description.toLowerCase();
       return title.includes(normalizedSearch) || description.includes(normalizedSearch);
-    })
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .map(mapRow);
+    });
+
+  const entries = filtered.slice();
+  const sorted = entries.sort((a, b) => {
+    if (!sortField) {
+      return b.createdAt.localeCompare(a.createdAt);
+    }
+    const aValue =
+      sortField === "visibility" ? a.visibility : a.title.toLowerCase();
+    const bValue =
+      sortField === "visibility" ? b.visibility : b.title.toLowerCase();
+    const comparison = aValue.localeCompare(bValue);
+    const direction = sortOrder === "desc" ? -1 : 1;
+    return comparison * direction;
+  });
+
+  return sorted.map(mapRow);
 };
 
 export const findProjectById = (projectId: string): ProjectRecord | null => {
