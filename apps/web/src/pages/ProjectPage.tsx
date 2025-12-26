@@ -48,6 +48,7 @@ const ProjectPage = (props: ProjectPageProps) => {
   const [savingNote, setSavingNote] = createSignal(false);
   const [memberUsername, setMemberUsername] = createSignal("");
   const [invitingMember, setInvitingMember] = createSignal(false);
+  const [activeTab, setActiveTab] = createSignal<"tasks" | "notes">("tasks");
 
   const notify = (message: string, type: NotificationType = "info") => {
     props.onNotify?.(message, type);
@@ -409,29 +410,26 @@ const ProjectPage = (props: ProjectPageProps) => {
 
   return (
     <section class="project-detail-layout">
-      <div class="project-detail-columns">
-      <section class="tasks-card">
-        <div class="project-detail-header">
+      <div class="project-header">
+        <div class="project-header__info">
           {props.onNavigate && (
             <button type="button" class="ghost" onClick={handleBack}>
               Back to projects
             </button>
           )}
-          <div>
-            <h1>{project()?.title ?? "Project details"}</h1>
-            <p class="table-description">
-              {project()?.description || "No description provided."}
+          <h1>{project()?.title ?? "Project details"}</h1>
+          <p class="project-description">
+            {project()?.description || "No description provided."}
+          </p>
+          <Show when={project()}>
+            <p class="helper-text">
+              Scope: {project()?.visibility === "corporate" ? "Corporate" : "Private"}
             </p>
-            <Show when={project()}>
-              <p class="helper-text">
-                Scope: {project()?.visibility === "corporate" ? "Corporate" : "Private"}
-              </p>
-            </Show>
-          </div>
+          </Show>
         </div>
 
         <Show when={project()}>
-          <div class="project-member-panel">
+          <aside class="project-header__members">
             <p class="helper-text">
               Owner: <strong>{project()?.owner}</strong>
             </p>
@@ -461,9 +459,41 @@ const ProjectPage = (props: ProjectPageProps) => {
                 {invitingMember() ? "Inviting..." : "Add person"}
               </button>
             </form>
-          </div>
+          </aside>
         </Show>
+      </div>
 
+      <Show when={error()}>
+        <p class="helper-text">{error()}</p>
+      </Show>
+
+      <div class="project-tabs" role="tablist">
+        <button
+          classList={{ "project-tab": true, "project-tab--active": activeTab() === "tasks" }}
+          type="button"
+          role="tab"
+          aria-selected={activeTab() === "tasks"}
+          onClick={() => setActiveTab("tasks")}
+        >
+          Tasks
+        </button>
+        <button
+          classList={{ "project-tab": true, "project-tab--active": activeTab() === "notes" }}
+          type="button"
+          role="tab"
+          aria-selected={activeTab() === "notes"}
+          onClick={() => setActiveTab("notes")}
+        >
+          Notes
+        </button>
+      </div>
+
+      <Show when={loading()}>
+        <p class="helper-text">Loading project...</p>
+      </Show>
+
+      <Show when={!loading() && project() && activeTab() === "tasks"}>
+        <section class="tasks-panel">
           <form class="task-form" onSubmit={handleCreateTask}>
             <label>
               Title
@@ -490,153 +520,143 @@ const ProjectPage = (props: ProjectPageProps) => {
             </button>
           </form>
 
-          <Show when={error()}>
-            <p class="helper-text">{error()}</p>
+          <p class="helper-text">
+            {tasks().length} task{tasks().length === 1 ? "" : "s"} attached to this project.
+          </p>
+
+          <Show when={tasks().length === 0}>
+            <p class="helper-text">No tasks are linked to this project yet.</p>
           </Show>
 
-          <Show when={loading()}>
-            <p class="helper-text">Loading project...</p>
-          </Show>
-
-          <Show when={!loading() && project()}>
-            <p class="helper-text">
-              {tasks().length} task{tasks().length === 1 ? "" : "s"} attached to this project.
-            </p>
-
-            <Show when={tasks().length === 0}>
-              <p class="helper-text">No tasks are linked to this project yet.</p>
-            </Show>
-
-            <Show when={tasks().length > 0}>
-              <div class="tasks-table-wrapper">
-                <table class="tasks-table">
-                  <thead>
-                    <tr>
-                      <th>Title &amp; description</th>
-                      <th>Status</th>
-                      <th>Updated</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <For each={tasks()}>
-                      {(task) => (
-                        <tr class={task.completed ? "completed" : ""}>
-                          <td>
-                            <strong>{task.title}</strong>
-                            <p class="table-description">
-                              {task.description || "No description provided."}
-                            </p>
-                          </td>
-                          <td>
-                            <span class={`status-pill ${task.completed ? "completed" : ""}`}>
-                              {task.completed ? "Completed" : "Pending"}
-                            </span>
-                          </td>
-                          <td>
-                            <span>Updated {new Date(task.updatedAt).toLocaleString()}</span>
-                          </td>
-                          <td>
-                            <div class="task-actions">
-                              <button
-                                type="button"
-                                class="ghost"
-                                onClick={() => handleToggleCompleted(task)}
-                              >
-                                {task.completed ? "Undo" : "Complete"}
-                              </button>
-                              <button type="button" class="ghost" onClick={() => viewTaskDetail(task)}>
-                                View
-                              </button>
-                              <button type="button" class="ghost" onClick={() => handleDelete(task.id)}>
-                                Delete
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </For>
-                  </tbody>
-                </table>
-              </div>
-            </Show>
+          <Show when={tasks().length > 0}>
+            <div class="tasks-table-wrapper">
+              <table class="tasks-table">
+                <thead>
+                  <tr>
+                    <th>Title &amp; description</th>
+                    <th>Status</th>
+                    <th>Updated</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <For each={tasks()}>
+                    {(task) => (
+                      <tr class={task.completed ? "completed" : ""}>
+                        <td>
+                          <strong>{task.title}</strong>
+                          <p class="table-description">
+                            {task.description || "No description provided."}
+                          </p>
+                        </td>
+                        <td>
+                          <span class={`status-pill ${task.completed ? "completed" : ""}`}>
+                            {task.completed ? "Completed" : "Pending"}
+                          </span>
+                        </td>
+                        <td>
+                          <span>Updated {new Date(task.updatedAt).toLocaleString()}</span>
+                        </td>
+                        <td>
+                          <div class="task-actions">
+                            <button
+                              type="button"
+                              class="ghost"
+                              onClick={() => handleToggleCompleted(task)}
+                            >
+                              {task.completed ? "Undo" : "Complete"}
+                            </button>
+                            <button type="button" class="ghost" onClick={() => viewTaskDetail(task)}>
+                              View
+                            </button>
+                            <button type="button" class="ghost" onClick={() => handleDelete(task.id)}>
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </For>
+                </tbody>
+              </table>
+            </div>
           </Show>
         </section>
+      </Show>
 
-        <Show when={!loading() && project()}>
-          <article class="knowledge-panel project-notes-card">
-            <h2>Project notes</h2>
-            <p class="helper-text">
-              Capture quick guidance, insights, or reminders that live alongside this project.
-            </p>
+      <Show when={!loading() && project() && activeTab() === "notes"}>
+        <article class="knowledge-panel project-notes-card">
+          <h2>Project notes</h2>
+          <p class="helper-text">
+            Capture quick guidance, insights, or reminders that live alongside this project.
+          </p>
 
-            <form class="knowledge-form" onSubmit={handleCreateNote}>
-              <label>
-                Title
-                <input
-                  class="text-input"
-                  value={noteTitle()}
-                  onInput={(event) => setNoteTitle(event.currentTarget.value)}
-                  placeholder="Note title"
-                  required
-                />
-              </label>
-              <label>
-                Content
-                <textarea
-                  class="text-input knowledge-textarea"
-                  value={noteContent()}
-                  onInput={(event) => setNoteContent(event.currentTarget.value)}
-                  placeholder="Details or context for this note"
-                />
-              </label>
-              <label>
-                Tags (comma separated)
-                <input
-                  class="text-input"
-                  value={noteTags()}
-                  onInput={(event) => setNoteTags(event.currentTarget.value)}
-                />
-              </label>
-              <button class="primary" type="submit" disabled={savingNote()}>
-                {savingNote() ? "Saving..." : "Save note"}
-              </button>
-            </form>
+          <form class="knowledge-form" onSubmit={handleCreateNote}>
+            <label>
+              Title
+              <input
+                class="text-input"
+                value={noteTitle()}
+                onInput={(event) => setNoteTitle(event.currentTarget.value)}
+                placeholder="Note title"
+                required
+              />
+            </label>
+            <label>
+              Content
+              <textarea
+                class="text-input knowledge-textarea"
+                value={noteContent()}
+                onInput={(event) => setNoteContent(event.currentTarget.value)}
+                placeholder="Details or context for this note"
+              />
+            </label>
+            <label>
+              Tags (comma separated)
+              <input
+                class="text-input"
+                value={noteTags()}
+                onInput={(event) => setNoteTags(event.currentTarget.value)}
+              />
+            </label>
+            <button class="primary" type="submit" disabled={savingNote()}>
+              {savingNote() ? "Saving..." : "Save note"}
+            </button>
+          </form>
 
-            <Show when={notes().length === 0}>
-              <p class="helper-text">No notes attached to this project yet.</p>
-            </Show>
+          <Show when={notes().length === 0}>
+            <p class="helper-text">No notes attached to this project yet.</p>
+          </Show>
 
-            <Show when={notes().length > 0}>
-              <div class="knowledge-list">
-                <For each={notes()}>
-                  {(note) => (
-                    <article class="knowledge-item">
-                      <div class="knowledge-item-header">
-                        <strong>{note.title}</strong>
-                        <span class="status-pill">
-                          Updated {new Date(note.updatedAt).toLocaleDateString()}
-                        </span>
+          <Show when={notes().length > 0}>
+            <div class="knowledge-list">
+              <For each={notes()}>
+                {(note) => (
+                  <article class="knowledge-item">
+                    <div class="knowledge-item-header">
+                      <strong>{note.title}</strong>
+                      <span class="status-pill">
+                        Updated {new Date(note.updatedAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <p>{note.content || "No content yet."}</p>
+                    <Show when={note.tags.length > 0}>
+                      <div class="knowledge-item-tags">
+                        <For each={note.tags}>{(tag) => <span class="knowledge-tag">{tag}</span>}</For>
                       </div>
-                      <p>{note.content || "No content yet."}</p>
-                      <Show when={note.tags.length > 0}>
-                        <div class="knowledge-item-tags">
-                          <For each={note.tags}>{(tag) => <span class="knowledge-tag">{tag}</span>}</For>
-                        </div>
-                      </Show>
-                      <div class="knowledge-actions">
-                        <button class="ghost" type="button" onClick={() => handleDeleteNote(note.id)}>
-                          Delete
-                        </button>
-                      </div>
-                    </article>
-                  )}
-                </For>
-              </div>
-            </Show>
-          </article>
-        </Show>
-      </div>
+                    </Show>
+                    <div class="knowledge-actions">
+                      <button class="ghost" type="button" onClick={() => handleDeleteNote(note.id)}>
+                        Delete
+                      </button>
+                    </div>
+                  </article>
+                )}
+              </For>
+            </div>
+          </Show>
+        </article>
+      </Show>
     </section>
   );
 };
