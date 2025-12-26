@@ -36,8 +36,6 @@ const ProjectPage = (props: ProjectPageProps) => {
   const [error, setError] = createSignal<string | null>(null);
   const [creating, setCreating] = createSignal(false);
   const [newTitle, setNewTitle] = createSignal("");
-  const [newDescription, setNewDescription] = createSignal("");
-  const [newStatus, setNewStatus] = createSignal<TaskStatus>(TASK_STATUS_OPTIONS[0]);
   const [noteTitle, setNoteTitle] = createSignal("");
   const [noteContent, setNoteContent] = createSignal("");
   const [noteTags, setNoteTags] = createSignal("");
@@ -215,9 +213,7 @@ const ProjectPage = (props: ProjectPageProps) => {
         headers: getHeaders(),
         body: JSON.stringify({
           title,
-          description: newDescription().trim(),
-          projectId: currentProject.id,
-          status: newStatus()
+          projectId: currentProject.id
         })
       });
 
@@ -229,8 +225,6 @@ const ProjectPage = (props: ProjectPageProps) => {
       const created = (await response.json()) as TaskRecord;
       setTasks((current) => [created, ...current]);
       setNewTitle("");
-      setNewDescription("");
-      setNewStatus(TASK_STATUS_OPTIONS[0]);
       notify("Task created", "success");
     } catch (fetchError) {
       const message = (fetchError as Error).message || "Unable to create task.";
@@ -503,28 +497,6 @@ const ProjectPage = (props: ProjectPageProps) => {
                 placeholder="Task title"
                 required
               />
-            </label>
-            <label>
-              Description (optional)
-              <textarea
-                class="text-input"
-                value={newDescription()}
-                onInput={(event) => setNewDescription(event.currentTarget.value)}
-                rows={3}
-                placeholder="Describe what needs to be done"
-              />
-            </label>
-            <label>
-              Status
-              <select
-                class="status-select"
-                value={newStatus()}
-                onInput={(event) => setNewStatus(event.currentTarget.value as TaskStatus)}
-              >
-                <For each={TASK_STATUS_OPTIONS}>
-                  {(option) => <option value={option}>{option}</option>}
-                </For>
-              </select>
             </label>
             <button class="primary" type="submit" disabled={creating()}>
               {creating() ? "Saving..." : "Add task"}
