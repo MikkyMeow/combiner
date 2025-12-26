@@ -25,10 +25,19 @@ const mapRow = (row: ProjectRow): ProjectRecord => ({
 const userHasAccessToRow = (username: string, row: ProjectRow): boolean =>
   row.username === username || row.members.includes(username);
 
-export const listProjects = (username: string): ProjectRecord[] => {
+export const listProjects = (username: string, search?: string): ProjectRecord[] => {
   const state = loadDatabase();
+  const normalizedSearch = search?.trim().toLowerCase();
   return state.projects
     .filter((project) => userHasAccessToRow(username, project))
+    .filter((project) => {
+      if (!normalizedSearch) {
+        return true;
+      }
+      const title = project.title.toLowerCase();
+      const description = project.description.toLowerCase();
+      return title.includes(normalizedSearch) || description.includes(normalizedSearch);
+    })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .map(mapRow);
 };

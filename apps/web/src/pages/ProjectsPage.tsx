@@ -26,6 +26,7 @@ const ProjectsPage = ({
   const [error, setError] = createSignal<string | null>(null);
   const [newTitle, setNewTitle] = createSignal("");
   const [newDescription, setNewDescription] = createSignal("");
+  const [searchTerm, setSearchTerm] = createSignal("");
   const [isCreateModalOpen, setCreateModalOpen] = createSignal(false);
   const [visibility, setVisibility] = createSignal<ProjectVisibility>("private");
 
@@ -75,7 +76,7 @@ const ProjectsPage = ({
     notify(message, "error");
   };
 
-  const fetchProjects = async () => {
+  const fetchProjects = async (search?: string) => {
     if (!jwtToken) {
       handleUnauthorized();
       return;
@@ -84,7 +85,13 @@ const ProjectsPage = ({
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${apiUrl()}/projects`, {
+      const url = new URL(`${apiUrl()}/projects`);
+      const trimmedSearch = search?.trim();
+      if (trimmedSearch) {
+        url.searchParams.set("search", trimmedSearch);
+      }
+
+      const response = await fetch(url.toString(), {
         headers: getHeaders()
       });
 
@@ -102,6 +109,36 @@ const ProjectsPage = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  let searchDebounce: ReturnType<typeof setTimeout> | undefined;
+
+  const scheduleSearch = (value: string) => {
+    if (searchDebounce) {
+      clearTimeout(searchDebounce);
+    }
+    searchDebounce = setTimeout(() => {
+      void fetchProjects(value);
+      searchDebounce = undefined;
+    }, 400);
+  };
+
+  const handleSearchInput = (event: InputEvent) => {
+    const value = event.currentTarget.value;
+    setSearchTerm(value);
+    scheduleSearch(value);
+  };
+
+  const handleClearSearch = () => {
+    if (!searchTerm()) {
+      return;
+    }
+    if (searchDebounce) {
+      clearTimeout(searchDebounce);
+      searchDebounce = undefined;
+    }
+    setSearchTerm("");
+    void fetchProjects();
   };
 
   onMount(() => {
@@ -185,6 +222,22 @@ const ProjectsPage = ({
           +
         </button>
       </div>
+
+      <form class="projects-search" onSubmit={(event) => event.preventDefault()}>
+        <input
+          type="search"
+          class="text-input"
+          value={searchTerm()}
+          onInput={handleSearchInput}
+          placeholder="Search by title or description"
+          aria-label="Search projects"
+        />
+        <Show when={searchTerm()}>
+          <button type="button" class="ghost" onClick={handleClearSearch}>
+            Clear
+          </button>
+        </Show>
+      </form>
 
       <Show when={error()}>
         <p class="helper-text">{error()}</p>

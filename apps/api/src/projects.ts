@@ -61,12 +61,17 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
     return null;
   };
 
-  server.get("/projects", { preValidation: [ensureAuthenticated] }, async (request, reply) => {
+  server.get<{ Querystring: { search?: string } }>(
+    "/projects",
+    { preValidation: [ensureAuthenticated] },
+    async (request, reply) => {
     const authUser = requireUser(request, reply);
     if (!authUser) return;
 
-    const projects = listProjects(authUser.username);
+    const normalizedSearch = request.query.search?.trim();
+    const projects = listProjects(authUser.username, normalizedSearch?.length ? normalizedSearch : undefined);
     return { projects };
+  });
   });
 
   server.get<{ Params: { id: string } }>(
