@@ -10,7 +10,10 @@ import teamsRoutes from "./teams";
 
 const server = Fastify({ logger: true });
 
-server.register(cors, { origin: true });
+server.register(cors, {
+  origin: true,
+  methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]
+});
 
 server.get("/hello", async () => ({ message: "Hello from backend" }));
 
