@@ -1,4 +1,4 @@
-import { createEffect, createSignal, For, Show } from "solid-js";
+import { createEffect, createSignal, For, Show, onMount } from "solid-js";
 import type { NotificationType } from "../components/notifications/useNotifications";
 import type { Project } from "../types/project";
 import {
@@ -9,6 +9,12 @@ import {
 import type { TaskRecord, TaskStatus } from "../types/task";
 
 const apiUrl = () => import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+type TaskViewMode = "list" | "kanban";
+const TASK_VIEW_STORAGE_KEY = "projectTasksViewMode";
+const TASK_VIEW_OPTIONS: { value: TaskViewMode; label: string }[] = [
+  { value: "list", label: "List" },
+  { value: "kanban", label: "Kanban" }
+];
 
 type Note = {
   id: string;
@@ -35,6 +41,7 @@ const ProjectPage = (props: ProjectPageProps) => {
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [creating, setCreating] = createSignal(false);
+  const [taskView, setTaskView] = createSignal<TaskViewMode>("list");
   const [newTitle, setNewTitle] = createSignal("");
   const [noteTitle, setNoteTitle] = createSignal("");
   const [noteContent, setNoteContent] = createSignal("");
@@ -43,6 +50,19 @@ const ProjectPage = (props: ProjectPageProps) => {
   const [memberUsername, setMemberUsername] = createSignal("");
   const [invitingMember, setInvitingMember] = createSignal(false);
   const [activeTab, setActiveTab] = createSignal<"tasks" | "notes">("tasks");
+
+  onMount(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem(TASK_VIEW_STORAGE_KEY);
+    if (stored === "list" || stored === "kanban") {
+      setTaskView(stored);
+    }
+  });
+
+  createEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(TASK_VIEW_STORAGE_KEY, taskView());
+  });
 
   const notify = (message: string, type: NotificationType = "info") => {
     props.onNotify?.(message, type);
@@ -89,6 +109,9 @@ const ProjectPage = (props: ProjectPageProps) => {
       .split(",")
       .map((tag) => tag.trim())
       .filter((tag) => tag.length > 0);
+
+  const getTasksByStatus = (status: TaskStatus) =>
+    tasks().filter((task) => task.status === status);
 
   const fetchProject = async (projectId: string) => {
     if (!props.jwtToken) {
@@ -503,6 +526,25 @@ const ProjectPage = (props: ProjectPageProps) => {
             </button>
           </form>
 
+          <div class="task-view-controls">
+            <span class="helper-text">Display</span>
+            <div class="task-view-toggle">
+              <For each={TASK_VIEW_OPTIONS}>
+                {(option) => (
+                  <button
+                    type="button"
+                    class={`ghost task-view-toggle__button ${
+                      taskView() === option.value ? "task-view-toggle__button--active" : ""
+                    }`}
+                    onClick={() => setTaskView(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                )}
+              </For>
+            </div>
+          </div>
+
           <p class="helper-text">
             {tasks().length} task{tasks().length === 1 ? "" : "s"} attached to this project.
           </p>
@@ -512,71 +554,126 @@ const ProjectPage = (props: ProjectPageProps) => {
           </Show>
 
           <Show when={tasks().length > 0}>
-            <div class="tasks-table-wrapper">
-              <table class="tasks-table">
-                <thead>
-                  <tr>
-                    <th>Title &amp; description</th>
-                    <th>Status</th>
-                    <th>Updated</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <For each={tasks()}>
-                    {(task) => (
-                      <tr class={`status-row ${getStatusRowClass(task.status)}`}>
-                        <td>
-                          <strong>{task.title}</strong>
-                          <p class="table-description">
-                            {task.description || "No description provided."}
-                          </p>
-                        </td>
-                        <td>
-                          <div class="status-cell">
-                            <span class={`status-pill ${getStatusPillClass(task.status)}`}>
-                              {task.status}
-                            </span>
-                            <select
-                              class="status-select"
-                              value={task.status}
-                              onInput={(event) =>
-                                handleChangeStatus(task, event.currentTarget.value as TaskStatus)
-                              }
-                            >
-                              <For each={TASK_STATUS_OPTIONS}>
-                                {(option) => <option value={option}>{option}</option>}
-                              </For>
-                            </select>
-                          </div>
-                        </td>
-                        <td>
-                          <span>Updated {new Date(task.updatedAt).toLocaleString()}</span>
-                        </td>
-                        <td>
-                          <div class="task-actions">
-                            <button
-                              type="button"
-                              class="ghost"
-                              onClick={() => viewTaskDetail(task)}
-                            >
-                              View
-                            </button>
-                            <button
-                              type="button"
-                              class="ghost"
-                              onClick={() => handleDelete(task.id)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </For>
-                </tbody>
-              </table>
-            </div>
+            <Show when={taskView() === "list"}>
+              <div class="tasks-table-wrapper">
+                <table class="tasks-table">
+                  <thead>
+                    <tr>
+                      <th>Title &amp; description</th>
+                      <th>Status</th>
+                      <th>Updated</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <For each={tasks()}>
+                      {(task) => (
+                        <tr class={`status-row ${getStatusRowClass(task.status)}`}>
+                          <td>
+                            <strong>{task.title}</strong>
+                            <p class="table-description">
+                              {task.description || "No description provided."}
+                            </p>
+                          </td>
+                          <td>
+                            <div class="status-cell">
+                              <span class={`status-pill ${getStatusPillClass(task.status)}`}>
+                                {task.status}
+                              </span>
+                              <select
+                                class="status-select"
+                                value={task.status}
+                                onInput={(event) =>
+                                  handleChangeStatus(task, event.currentTarget.value as TaskStatus)
+                                }
+                              >
+                                <For each={TASK_STATUS_OPTIONS}>
+                                  {(option) => <option value={option}>{option}</option>}
+                                </For>
+                              </select>
+                            </div>
+                          </td>
+                          <td>
+                            <span>Updated {new Date(task.updatedAt).toLocaleString()}</span>
+                          </td>
+                          <td>
+                            <div class="task-actions">
+                              <button
+                                type="button"
+                                class="ghost"
+                                onClick={() => viewTaskDetail(task)}
+                              >
+                                View
+                              </button>
+                              <button
+                                type="button"
+                                class="ghost"
+                                onClick={() => handleDelete(task.id)}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </For>
+                  </tbody>
+                </table>
+              </div>
+            </Show>
+            <Show when={taskView() === "kanban"}>
+              <div class="kanban-board">
+                <For each={TASK_STATUS_OPTIONS}>
+                  {(status) => {
+                    const columnTasks = getTasksByStatus(status);
+                    return (
+                      <section class="kanban-column">
+                        <div class="kanban-column__header">
+                          <strong>{status}</strong>
+                          <span class="helper-text">
+                            {columnTasks.length} task{columnTasks.length === 1 ? "" : "s"}
+                          </span>
+                        </div>
+                        <div class="kanban-column__list">
+                          <For each={columnTasks}>
+                            {(task) => (
+                              <article class="kanban-card">
+                                <strong>{task.title}</strong>
+                                <p class="table-description">
+                                  {task.description || "No description provided."}
+                                </p>
+                                <p class="helper-text">
+                                  Updated {new Date(task.updatedAt).toLocaleString()}
+                                </p>
+                                <div class="task-actions kanban-card-actions">
+                                  <button
+                                    type="button"
+                                    class="ghost"
+                                    onClick={() => viewTaskDetail(task)}
+                                  >
+                                    View
+                                  </button>
+                                  <button
+                                    type="button"
+                                    class="ghost"
+                                    onClick={() => handleDelete(task.id)}
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </article>
+                            )}
+                          </For>
+                          <Show when={columnTasks.length === 0}>
+                            <p class="helper-text kanban-empty">No tasks yet.</p>
+                          </Show>
+                        </div>
+                      </section>
+                    );
+                  }}
+                </For>
+              </div>
+            </Show>
           </Show>
         </section>
       </Show>
