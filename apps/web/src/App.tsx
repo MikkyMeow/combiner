@@ -69,7 +69,7 @@ const getRoleFromToken = (token: string | null): UserRole | null => {
   try {
     const parsed = JSON.parse(payload) as { role?: UserRole };
     const { role } = parsed;
-    if (role === "owner" || role === "employee" || role === "user") {
+    if (role === "owner" || role === "employee" || role === "user" || role === "guest") {
       return role;
     }
   } catch {
@@ -145,12 +145,19 @@ const App = () => {
     setJwtToken(token);
   };
 
-  const handleLogout = () => {
+  const resetSession = (message?: string) => {
     closeMobileNav();
     setJwtToken(null);
     localStorage.removeItem("jwtToken");
+    if (message) {
+      enqueueNotification(message, "warning");
+    }
     navigate("/login");
   };
+
+  const handleLogout = () => resetSession();
+
+  const handleUnauthorized = () => resetSession("Session expired. Please sign in again.");
   const applyThemePreference = (value: "dark" | "light") => {
     if (typeof document !== "undefined") {
       document.documentElement.dataset.theme = value;
@@ -169,7 +176,7 @@ const App = () => {
   const isProjectDetailPath = (path: string) =>
     /^\/projects\/[^/]+$/.test(path);
   const isTaskDetailPath = (path: string) => /^\/tasks\/[^/]+$/.test(path);
-  const userRole = createMemo(() => getRoleFromToken(jwtToken()));
+  const userRole = createMemo(() => getRoleFromToken(jwtToken()) ?? "guest");
 
   onMount(() => {
     const handleUnload = () => saveScroll(page());
@@ -230,6 +237,7 @@ const App = () => {
           jwtToken={jwtToken()}
           onNotify={enqueueNotification}
           onNavigate={navigate}
+          onUnauthorized={handleUnauthorized}
         />
       );
     }
@@ -243,6 +251,7 @@ const App = () => {
           jwtToken={jwtToken()}
           onNotify={enqueueNotification}
           onNavigate={navigate}
+          onUnauthorized={handleUnauthorized}
         />
       );
     }
@@ -266,23 +275,26 @@ const App = () => {
             jwtToken={jwtToken()}
             onNotify={enqueueNotification}
             onTokenRefresh={handleTokenRefresh}
+            onUnauthorized={handleUnauthorized}
           />
         );
-        case "/projects":
-          return (
-            <ProjectsPage
-              jwtToken={jwtToken()}
-              userRole={userRole()}
-              onNotify={enqueueNotification}
-              onNavigate={navigate}
-            />
-          );
+      case "/projects":
+        return (
+          <ProjectsPage
+            jwtToken={jwtToken()}
+            userRole={userRole()}
+            onNotify={enqueueNotification}
+            onNavigate={navigate}
+            onUnauthorized={handleUnauthorized}
+          />
+        );
       case "/teams":
         return (
           <TeamsPage
             jwtToken={jwtToken()}
             userRole={userRole()}
             onNotify={enqueueNotification}
+            onUnauthorized={handleUnauthorized}
           />
         );
       default:

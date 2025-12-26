@@ -19,6 +19,7 @@ type TaskPageProps = {
   jwtToken: string | null;
   onNotify?: (message: string, type?: NotificationType) => void;
   onNavigate?: (path: string) => void;
+  onUnauthorized?: () => void;
 };
 
 const TaskPage = (props: TaskPageProps) => {
@@ -51,6 +52,10 @@ const TaskPage = (props: TaskPageProps) => {
   };
 
   const handleFetchError = async (response: Response) => {
+    if (response.status === 401) {
+      props.onUnauthorized?.();
+      return;
+    }
     let message = "Unable to reach the server.";
     try {
       const payload = (await response.json()) as { message?: string };

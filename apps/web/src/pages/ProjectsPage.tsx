@@ -7,12 +7,19 @@ const apiUrl = () => import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
 type ProjectsPageProps = {
   jwtToken: string | null;
-  userRole?: UserRole | null;
+  userRole: UserRole;
   onNotify?: (message: string, type?: NotificationType) => void;
   onNavigate?: (path: string) => void;
+  onUnauthorized?: () => void;
 };
 
-const ProjectsPage = ({ jwtToken, userRole, onNotify, onNavigate }: ProjectsPageProps) => {
+const ProjectsPage = ({
+  jwtToken,
+  userRole,
+  onNotify,
+  onNavigate,
+  onUnauthorized
+}: ProjectsPageProps) => {
   const [projects, setProjects] = createSignal<Project[]>([]);
   const [loading, setLoading] = createSignal(false);
   const [creating, setCreating] = createSignal(false);
@@ -49,6 +56,10 @@ const ProjectsPage = ({ jwtToken, userRole, onNotify, onNavigate }: ProjectsPage
   };
 
   const handleFetchError = async (response: Response) => {
+    if (response.status === 401) {
+      onUnauthorized?.();
+      return;
+    }
     let message = "Unable to reach the server.";
     try {
       const payload = (await response.json()) as { message?: string };

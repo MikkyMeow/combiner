@@ -1,14 +1,15 @@
 import { createSignal, For, Show, onMount } from "solid-js";
 import type { NotificationType } from "../components/notifications/useNotifications";
 import type { Project } from "../types/project";
+import type { UserRole } from "../types/user";
 
 const apiUrl = () => import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
-type UserRole = "owner" | "user" | "employee";
 const ROLE_LABELS: Record<UserRole, string> = {
   owner: "Owner",
   user: "User",
-  employee: "Employee"
+  employee: "Employee",
+  guest: "Guest"
 };
 
 type UserProfile = {
@@ -50,6 +51,7 @@ type ProfilePageProps = {
   jwtToken: string | null;
   onNotify?: (message: string, type?: NotificationType) => void;
   onTokenRefresh?: (token: string) => void;
+  onUnauthorized?: () => void;
 };
 
 const formatDate = (value: string) => new Date(value).toLocaleString();
@@ -60,7 +62,7 @@ const notePreview = (note: Note) => {
   return trimmed.length > 40 ? `${trimmed.slice(0, 40)}…` : trimmed;
 };
 
-const ProfilePage = ({ jwtToken, onNotify, onTokenRefresh }: ProfilePageProps) => {
+const ProfilePage = ({ jwtToken, onNotify, onTokenRefresh, onUnauthorized }: ProfilePageProps) => {
   const [profile, setProfile] = createSignal<ProfilePayload | null>(null);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
@@ -115,6 +117,10 @@ const ProfilePage = ({ jwtToken, onNotify, onTokenRefresh }: ProfilePageProps) =
   };
 
   const handleFetchError = async (response: Response) => {
+    if (response.status === 401) {
+      onUnauthorized?.();
+      return;
+    }
     let message = `${response.status} ${response.statusText}`;
     try {
       const payload = (await response.json()) as { message?: string };
@@ -216,6 +222,11 @@ const ProfilePage = ({ jwtToken, onNotify, onTokenRefresh }: ProfilePageProps) =
         body: JSON.stringify({ name: trimmedName })
       });
       const payload = (await response.json()) as ProfilePayload & { token?: string; message?: string };
+
+      if (response.status === 401) {
+        onUnauthorized?.();
+        return;
+      }
 
       if (!response.ok) {
         const message = payload?.message ?? "Unable to create company.";

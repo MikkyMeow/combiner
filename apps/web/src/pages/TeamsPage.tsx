@@ -33,6 +33,7 @@ type TeamsPageProps = {
   jwtToken: string | null;
   userRole: UserRole | null;
   onNotify?: (message: string, type?: NotificationType) => void;
+  onUnauthorized?: () => void;
 };
 
 const formatDate = (value: string) => new Date(value).toLocaleString();
@@ -43,6 +44,9 @@ const formatRoleLabel = (role: UserRole) => {
   }
   if (role === "employee") {
     return "Employee";
+  }
+  if (role === "guest") {
+    return "Guest";
   }
   return "User";
 };
@@ -68,6 +72,14 @@ const TeamsPage = (props: TeamsPageProps) => {
     props.onNotify?.(message, type);
   };
 
+  const handleUnauthorizedResponse = (response: Response) => {
+    if (response.status === 401) {
+      props.onUnauthorized?.();
+      return true;
+    }
+    return false;
+  };
+
   const getHeaders = () => {
     const headers: Record<string, string> = {
       "Content-Type": "application/json"
@@ -79,6 +91,9 @@ const TeamsPage = (props: TeamsPageProps) => {
   };
 
   const handleFetchError = async (response: Response) => {
+    if (handleUnauthorizedResponse(response)) {
+      return;
+    }
     let message = `${response.status} ${response.statusText}`;
     try {
       const payload = (await response.json()) as { message?: string };
@@ -94,6 +109,9 @@ const TeamsPage = (props: TeamsPageProps) => {
   };
 
   const handleProfileError = async (response: Response) => {
+    if (handleUnauthorizedResponse(response)) {
+      return;
+    }
     let message = `${response.status} ${response.statusText}`;
     try {
       const payload = (await response.json()) as { message?: string };
@@ -112,6 +130,9 @@ const TeamsPage = (props: TeamsPageProps) => {
   };
 
   const handleCompanyMembersError = async (response: Response) => {
+    if (handleUnauthorizedResponse(response)) {
+      return;
+    }
     let message = `${response.status} ${response.statusText}`;
     try {
       const payload = (await response.json()) as { message?: string };

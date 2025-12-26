@@ -1,4 +1,4 @@
-export type UserRole = "owner" | "user" | "employee";
+export type UserRole = "owner" | "user" | "employee" | "guest";
 
 export const TEAM_ROLES: UserRole[] = ["owner", "employee"];
 
