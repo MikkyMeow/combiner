@@ -947,6 +947,7 @@ label {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
   gap: 1rem;
+  user-select: none;
 }
 
 .kanban-column {
@@ -958,6 +959,7 @@ label {
   flex-direction: column;
   gap: 0.75rem;
   min-height: 220px;
+  user-select: none;
 }
 
 .kanban-column__header {
@@ -982,6 +984,7 @@ label {
   flex-direction: column;
   gap: 0.35rem;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  user-select: none;
 }
 
 .kanban-card-actions {
