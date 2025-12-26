@@ -25,11 +25,21 @@ const mapRow = (row: ProjectRow): ProjectRecord => ({
 const userHasAccessToRow = (username: string, row: ProjectRow): boolean =>
   row.username === username || row.members.includes(username);
 
-export const listProjects = (username: string, search?: string): ProjectRecord[] => {
+export const listProjects = (
+  username: string,
+  search?: string,
+  visibility?: ProjectRecord["visibility"][]
+): ProjectRecord[] => {
   const state = loadDatabase();
   const normalizedSearch = search?.trim().toLowerCase();
   return state.projects
     .filter((project) => userHasAccessToRow(username, project))
+    .filter((project) => {
+      if (!visibility || visibility.length === 0) {
+        return true;
+      }
+      return visibility.includes(project.visibility);
+    })
     .filter((project) => {
       if (!normalizedSearch) {
         return true;

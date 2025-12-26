@@ -27,6 +27,7 @@ const ProjectsPage = ({
   const [newTitle, setNewTitle] = createSignal("");
   const [newDescription, setNewDescription] = createSignal("");
   const [searchTerm, setSearchTerm] = createSignal("");
+  const [visibilityFilters, setVisibilityFilters] = createSignal<Project["visibility"][]>([]);
   const [isCreateModalOpen, setCreateModalOpen] = createSignal(false);
   const [visibility, setVisibility] = createSignal<ProjectVisibility>("private");
 
@@ -76,7 +77,7 @@ const ProjectsPage = ({
     notify(message, "error");
   };
 
-  const fetchProjects = async (search?: string) => {
+  const fetchProjects = async (search?: string, filters?: Project["visibility"][]) => {
     if (!jwtToken) {
       handleUnauthorized();
       return;
@@ -89,6 +90,9 @@ const ProjectsPage = ({
       const trimmedSearch = search?.trim();
       if (trimmedSearch) {
         url.searchParams.set("search", trimmedSearch);
+      }
+      if (filters?.length) {
+        filters.forEach((value) => url.searchParams.append("visibility", value));
       }
 
       const response = await fetch(url.toString(), {
@@ -113,20 +117,20 @@ const ProjectsPage = ({
 
   let searchDebounce: ReturnType<typeof setTimeout> | undefined;
 
-  const scheduleSearch = (value: string) => {
+  const scheduleFetch = (searchValue: string, filters: Project["visibility"][]) => {
     if (searchDebounce) {
       clearTimeout(searchDebounce);
     }
     searchDebounce = setTimeout(() => {
-      void fetchProjects(value);
+      void fetchProjects(searchValue, filters);
       searchDebounce = undefined;
-    }, 400);
+    }, 300);
   };
 
   const handleSearchInput = (event: InputEvent) => {
     const value = event.currentTarget.value;
     setSearchTerm(value);
-    scheduleSearch(value);
+    scheduleFetch(value, visibilityFilters());
   };
 
   const handleClearSearch = () => {
@@ -138,7 +142,15 @@ const ProjectsPage = ({
       searchDebounce = undefined;
     }
     setSearchTerm("");
-    void fetchProjects();
+    void fetchProjects("", visibilityFilters());
+  };
+
+  const toggleVisibilityFilter = (value: Project["visibility"]) => {
+    setVisibilityFilters((current) => {
+      const next = current.includes(value) ? current.filter((item) => item !== value) : [...current, value];
+      scheduleFetch(searchTerm(), next);
+      return next;
+    });
   };
 
   onMount(() => {
@@ -224,19 +236,39 @@ const ProjectsPage = ({
       </div>
 
       <form class="projects-search" onSubmit={(event) => event.preventDefault()}>
-        <input
-          type="search"
-          class="text-input"
-          value={searchTerm()}
-          onInput={handleSearchInput}
-          placeholder="Search by title or description"
-          aria-label="Search projects"
-        />
-        <Show when={searchTerm()}>
-          <button type="button" class="ghost" onClick={handleClearSearch}>
-            Clear
-          </button>
-        </Show>
+        <div class="projects-search__controls">
+          <input
+            type="search"
+            class="text-input"
+            value={searchTerm()}
+            onInput={handleSearchInput}
+            placeholder="Search by title or description"
+            aria-label="Search projects"
+          />
+          <Show when={searchTerm()}>
+            <button type="button" class="ghost" onClick={handleClearSearch}>
+              Clear
+            </button>
+          </Show>
+        </div>
+        <div class="projects-search__filters" role="group" aria-label="Visibility filters">
+          <label class="projects-search__filter">
+            <input
+              type="checkbox"
+              checked={visibilityFilters().includes("private")}
+              onInput={() => toggleVisibilityFilter("private")}
+            />
+            <span>Private</span>
+          </label>
+          <label class="projects-search__filter">
+            <input
+              type="checkbox"
+              checked={visibilityFilters().includes("corporate")}
+              onInput={() => toggleVisibilityFilter("corporate")}
+            />
+            <span>Corporate</span>
+          </label>
+        </div>
       </form>
 
       <Show when={error()}>
