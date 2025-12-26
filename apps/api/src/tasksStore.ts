@@ -1,10 +1,11 @@
 import { loadDatabase, saveDatabase, type TaskRow } from "./db";
+import type { TaskStatus } from "./taskStatus";
 
 export type TaskRecord = {
   id: string;
   title: string;
   description: string;
-  completed: boolean;
+  status: TaskStatus;
   projectId: string | null;
   createdBy: string;
   createdAt: string;
@@ -15,7 +16,7 @@ const mapRow = (row: TaskRow): TaskRecord => ({
   id: row.id,
   title: row.title,
   description: row.description,
-  completed: row.completed,
+  status: row.status,
   projectId: row.projectId,
   createdBy: row.createdBy ?? row.username,
   createdAt: row.createdAt,
@@ -56,7 +57,7 @@ export const insertTask = (username: string, task: TaskRecord): TaskRecord => {
 type TaskUpdatePayload = {
   title?: string;
   description?: string;
-  completed?: boolean;
+  status?: TaskStatus;
   projectId?: string | null;
   updatedAt: string;
 };
@@ -76,8 +77,8 @@ export const updateTask = (taskId: string, payload: TaskUpdatePayload): TaskReco
     target.description = payload.description;
   }
 
-  if (typeof payload.completed === "boolean") {
-    target.completed = payload.completed;
+  if (payload.status !== undefined) {
+    target.status = payload.status;
   }
 
   if (payload.projectId !== undefined) {

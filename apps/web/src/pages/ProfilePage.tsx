@@ -2,6 +2,8 @@ import { createSignal, For, Show, onMount } from "solid-js";
 import type { NotificationType } from "../components/notifications/useNotifications";
 import type { Project } from "../types/project";
 import type { UserRole } from "../types/user";
+import { getStatusPillClass } from "../types/task";
+import type { TaskRecord } from "../types/task";
 
 const apiUrl = () => import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
@@ -20,16 +22,6 @@ type UserProfile = {
   company: string | null;
 };
 
-type Task = {
-  id: string;
-  title: string;
-  description: string;
-  completed: boolean;
-  projectId: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
 type Note = {
   id: string;
   title: string;
@@ -42,7 +34,7 @@ type Note = {
 
 type ProfilePayload = {
   user: UserProfile;
-  tasks: Task[];
+  tasks: TaskRecord[];
   notes: Note[];
   projects: Project[];
 };
@@ -477,8 +469,8 @@ const ProfilePage = ({ jwtToken, onNotify, onTokenRefresh, onUnauthorized }: Pro
                           <li>
                             <div class="profile-item-heading">
                               <strong>{task.title}</strong>
-                              <span class={`status-pill ${task.completed ? "completed" : ""}`}>
-                                {task.completed ? "Completed" : "Pending"}
+                              <span class={`status-pill ${getStatusPillClass(task.status)}`}>
+                                {task.status}
                               </span>
                             </div>
                             <p class="small-text">

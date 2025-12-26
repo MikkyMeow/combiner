@@ -1,18 +1,12 @@
 import { createEffect, createSignal, Show } from "solid-js";
 import type { NotificationType } from "../components/notifications/useNotifications";
+import {
+  TASK_STATUS_OPTIONS,
+  getStatusPillClass
+} from "../types/task";
+import type { TaskRecord, TaskStatus } from "../types/task";
 
 const apiUrl = () => import.meta.env.VITE_API_URL ?? "http://localhost:3000";
-
-type Task = {
-  id: string;
-  title: string;
-  description: string;
-  completed: boolean;
-  projectId: string | null;
-  updatedAt: string;
-  createdAt: string;
-  createdBy: string;
-};
 
 type TaskPageProps = {
   taskId: string;
@@ -23,10 +17,10 @@ type TaskPageProps = {
 };
 
 const TaskPage = (props: TaskPageProps) => {
-  const [task, setTask] = createSignal<Task | null>(null);
+  const [task, setTask] = createSignal<TaskRecord | null>(null);
   const [title, setTitle] = createSignal("");
   const [description, setDescription] = createSignal("");
-  const [completed, setCompleted] = createSignal(false);
+  const [status, setStatus] = createSignal<TaskStatus>(TASK_STATUS_OPTIONS[0]);
   const [loading, setLoading] = createSignal(true);
   const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
@@ -91,7 +85,7 @@ const TaskPage = (props: TaskPageProps) => {
         return;
       }
 
-      const data = (await response.json()) as { tasks: Task[] };
+      const data = (await response.json()) as { tasks: TaskRecord[] };
       const found = data.tasks.find((entry) => entry.id === id);
       if (!found) {
         const message = "Task not found.";
@@ -103,7 +97,7 @@ const TaskPage = (props: TaskPageProps) => {
       setTask(found);
       setTitle(found.title);
       setDescription(found.description ?? "");
-      setCompleted(found.completed);
+      setStatus(found.status);
     } catch (fetchError) {
       const message = (fetchError as Error).message || "Unable to load task.";
       setError(message);
@@ -126,7 +120,7 @@ const TaskPage = (props: TaskPageProps) => {
 
   const updateTask = async (
     id: string,
-    body: Partial<{ title: string; description: string; completed: boolean }>,
+    body: Partial<{ title: string; description: string; status: TaskStatus }>,
     successMessage?: string
   ) => {
     if (!props.jwtToken) {
@@ -147,11 +141,11 @@ const TaskPage = (props: TaskPageProps) => {
         return null;
       }
 
-      const updated = (await response.json()) as Task;
+      const updated = (await response.json()) as TaskRecord;
       setTask(updated);
       setTitle(updated.title);
       setDescription(updated.description ?? "");
-      setCompleted(updated.completed);
+      setStatus(updated.status);
       if (successMessage) {
         notify(successMessage, "success");
       }
@@ -192,22 +186,13 @@ const TaskPage = (props: TaskPageProps) => {
     }
   };
 
-  const handleToggleCompleted = async () => {
+  const handleStatusChange = (nextStatus: TaskStatus) => {
     const current = task();
-    if (!current) {
+    if (!current || current.status === nextStatus) {
+      setStatus(nextStatus);
       return;
     }
-
-    setSaving(true);
-    try {
-      await updateTask(
-        current.id,
-        { completed: !current.completed },
-        current.completed ? "Task marked pending" : "Task marked complete"
-      );
-    } finally {
-      setSaving(false);
-    }
+    void updateTask(current.id, { status: nextStatus }, "Task status updated");
   };
 
   const handleBack = () => {
@@ -257,15 +242,25 @@ const TaskPage = (props: TaskPageProps) => {
 
       <Show when={!loading() && task()}>
         <div class="task-detail-summary">
-          <span class={`status-pill ${completed() ? "completed" : ""}`}>
-            {completed() ? "Completed" : "Pending"}
-          </span>
-            <p class="helper-text">
-              {task()?.projectId ? "Linked to project" : "No project assigned."}
-              <Show when={task()?.projectId}>
-                {(projectId) => <span> {projectId()}</span>}
-              </Show>
-            </p>
+          <span class={`status-pill ${getStatusPillClass(status())}`}>{status()}</span>
+          <label class="status-field">
+            Status
+            <select
+              class="status-select"
+              value={status()}
+              onInput={(event) => handleStatusChange(event.currentTarget.value as TaskStatus)}
+            >
+              <For each={TASK_STATUS_OPTIONS}>
+                {(option) => <option value={option}>{option}</option>}
+              </For>
+            </select>
+          </label>
+          <p class="helper-text">
+            {task()?.projectId ? "Linked to project" : "No project assigned."}
+            <Show when={task()?.projectId}>
+              {(projectId) => <span> {projectId()}</span>}
+            </Show>
+          </p>
         </div>
 
         <form class="task-form" onSubmit={handleSave}>
@@ -297,16 +292,6 @@ const TaskPage = (props: TaskPageProps) => {
           </div>
         </form>
 
-        <div class="task-detail-actions">
-          <button
-            type="button"
-            class="ghost"
-            onClick={handleToggleCompleted}
-            disabled={saving()}
-          >
-            {completed() ? "Mark as pending" : "Mark as complete"}
-          </button>
-        </div>
       </Show>
     </section>
   );

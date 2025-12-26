@@ -1009,10 +1009,6 @@ label {
   background: rgba(248, 250, 252, 0.08);
 }
 
-.tasks-table tbody tr.completed {
-  background: rgba(16, 185, 129, 0.2);
-}
-
 .table-description {
   margin: 0.35rem 0 0;
   font-size: 0.75rem;
@@ -1041,6 +1037,14 @@ label {
   flex-wrap: wrap;
 }
 
+.tasks-table tbody tr.status-row--done {
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.tasks-table tbody tr.status-row--in-progress {
+  background: rgba(251, 191, 36, 0.12);
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -1048,13 +1052,56 @@ label {
   border-radius: 999px;
   font-size: 0.7rem;
   font-weight: 600;
-  background: rgba(37, 99, 235, 0.25);
+  background: rgba(226, 232, 240, 0.8);
   color: var(--accent);
 }
 
-.tasks-table tbody tr.completed .status-pill {
+.status-pill--todo {
+  background: rgba(37, 99, 235, 0.2);
+  color: #1d4ed8;
+}
+
+.status-pill--in-progress {
+  background: rgba(251, 191, 36, 0.25);
+  color: #92400e;
+}
+
+.status-pill--done {
   background: rgba(16, 185, 129, 0.35);
-  color: #d1fae5;
+  color: #047857;
+}
+
+.status-cell {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.status-select {
+  border: 1px solid var(--surface-border);
+  border-radius: 999px;
+  padding: 0.2rem 0.8rem;
+  font-size: 0.7rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.status-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
+}
+
+.status-field {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  gap: 0.25rem;
+}
 }
 
 .notification-stack {

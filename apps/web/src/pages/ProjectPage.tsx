@@ -1,19 +1,14 @@
 import { createEffect, createSignal, For, Show } from "solid-js";
 import type { NotificationType } from "../components/notifications/useNotifications";
 import type { Project } from "../types/project";
+import {
+  TASK_STATUS_OPTIONS,
+  getStatusRowClass,
+  getStatusPillClass
+} from "../types/task";
+import type { TaskRecord, TaskStatus } from "../types/task";
 
 const apiUrl = () => import.meta.env.VITE_API_URL ?? "http://localhost:3000";
-
-type Task = {
-  id: string;
-  title: string;
-  description: string;
-  completed: boolean;
-  createdAt: string;
-  updatedAt: string;
-  projectId: string | null;
-  createdBy: string;
-};
 
 type Note = {
   id: string;
@@ -35,13 +30,14 @@ type ProjectPageProps = {
 
 const ProjectPage = (props: ProjectPageProps) => {
   const [project, setProject] = createSignal<Project | null>(null);
-  const [tasks, setTasks] = createSignal<Task[]>([]);
+  const [tasks, setTasks] = createSignal<TaskRecord[]>([]);
   const [notes, setNotes] = createSignal<Note[]>([]);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [creating, setCreating] = createSignal(false);
   const [newTitle, setNewTitle] = createSignal("");
   const [newDescription, setNewDescription] = createSignal("");
+  const [newStatus, setNewStatus] = createSignal<TaskStatus>(TASK_STATUS_OPTIONS[0]);
   const [noteTitle, setNoteTitle] = createSignal("");
   const [noteContent, setNoteContent] = createSignal("");
   const [noteTags, setNoteTags] = createSignal("");
@@ -118,7 +114,7 @@ const ProjectPage = (props: ProjectPageProps) => {
         return;
       }
 
-      const data = (await response.json()) as { project: Project; tasks: Task[]; notes?: Note[] };
+      const data = (await response.json()) as { project: Project; tasks: TaskRecord[]; notes?: Note[] };
       setProject(data.project);
       setTasks(data.tasks ?? []);
       setNotes(data.notes ?? []);
@@ -152,7 +148,7 @@ const ProjectPage = (props: ProjectPageProps) => {
 
   const updateTask = async (
     id: string,
-    body: Partial<{ title: string; description: string; completed: boolean }>,
+    body: Partial<{ title: string; description: string; status: TaskStatus }>,
     successMessage?: string
   ) => {
     if (!props.jwtToken) {
@@ -172,7 +168,7 @@ const ProjectPage = (props: ProjectPageProps) => {
         return null;
       }
 
-      const updated = (await response.json()) as Task;
+      const updated = (await response.json()) as TaskRecord;
       setTasks((current) => current.map((task) => (task.id === updated.id ? updated : task)));
 
       if (successMessage) {
@@ -220,7 +216,8 @@ const ProjectPage = (props: ProjectPageProps) => {
         body: JSON.stringify({
           title,
           description: newDescription().trim(),
-          projectId: currentProject.id
+          projectId: currentProject.id,
+          status: newStatus()
         })
       });
 
@@ -229,10 +226,11 @@ const ProjectPage = (props: ProjectPageProps) => {
         return;
       }
 
-      const created = (await response.json()) as Task;
+      const created = (await response.json()) as TaskRecord;
       setTasks((current) => [created, ...current]);
       setNewTitle("");
       setNewDescription("");
+      setNewStatus(TASK_STATUS_OPTIONS[0]);
       notify("Task created", "success");
     } catch (fetchError) {
       const message = (fetchError as Error).message || "Unable to create task.";
@@ -400,11 +398,12 @@ const ProjectPage = (props: ProjectPageProps) => {
     }
   };
 
-  const handleToggleCompleted = (task: Task) => {
-    void updateTask(task.id, { completed: !task.completed }, "Task status saved");
+  const handleChangeStatus = (task: TaskRecord, nextStatus: TaskStatus) => {
+    if (task.status === nextStatus) return;
+    void updateTask(task.id, { status: nextStatus }, "Task status saved");
   };
 
-  const viewTaskDetail = (task: Task) => {
+  const viewTaskDetail = (task: TaskRecord) => {
     props.onNavigate?.(`/tasks/${encodeURIComponent(task.id)}`);
   };
 
@@ -515,6 +514,18 @@ const ProjectPage = (props: ProjectPageProps) => {
                 placeholder="Describe what needs to be done"
               />
             </label>
+            <label>
+              Status
+              <select
+                class="status-select"
+                value={newStatus()}
+                onInput={(event) => setNewStatus(event.currentTarget.value as TaskStatus)}
+              >
+                <For each={TASK_STATUS_OPTIONS}>
+                  {(option) => <option value={option}>{option}</option>}
+                </For>
+              </select>
+            </label>
             <button class="primary" type="submit" disabled={creating()}>
               {creating() ? "Saving..." : "Add task"}
             </button>
@@ -542,7 +553,7 @@ const ProjectPage = (props: ProjectPageProps) => {
                 <tbody>
                   <For each={tasks()}>
                     {(task) => (
-                      <tr class={task.completed ? "completed" : ""}>
+                      <tr class={`status-row ${getStatusRowClass(task.status)}`}>
                         <td>
                           <strong>{task.title}</strong>
                           <p class="table-description">
@@ -550,9 +561,22 @@ const ProjectPage = (props: ProjectPageProps) => {
                           </p>
                         </td>
                         <td>
-                          <span class={`status-pill ${task.completed ? "completed" : ""}`}>
-                            {task.completed ? "Completed" : "Pending"}
-                          </span>
+                          <div class="status-cell">
+                            <span class={`status-pill ${getStatusPillClass(task.status)}`}>
+                              {task.status}
+                            </span>
+                            <select
+                              class="status-select"
+                              value={task.status}
+                              onInput={(event) =>
+                                handleChangeStatus(task, event.currentTarget.value as TaskStatus)
+                              }
+                            >
+                              <For each={TASK_STATUS_OPTIONS}>
+                                {(option) => <option value={option}>{option}</option>}
+                              </For>
+                            </select>
+                          </div>
                         </td>
                         <td>
                           <span>Updated {new Date(task.updatedAt).toLocaleString()}</span>
@@ -562,14 +586,15 @@ const ProjectPage = (props: ProjectPageProps) => {
                             <button
                               type="button"
                               class="ghost"
-                              onClick={() => handleToggleCompleted(task)}
+                              onClick={() => viewTaskDetail(task)}
                             >
-                              {task.completed ? "Undo" : "Complete"}
-                            </button>
-                            <button type="button" class="ghost" onClick={() => viewTaskDetail(task)}>
                               View
                             </button>
-                            <button type="button" class="ghost" onClick={() => handleDelete(task.id)}>
+                            <button
+                              type="button"
+                              class="ghost"
+                              onClick={() => handleDelete(task.id)}
+                            >
                               Delete
                             </button>
                           </div>

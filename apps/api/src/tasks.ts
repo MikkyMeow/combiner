@@ -9,18 +9,24 @@ import {
   type TaskRecord,
   updateTask
 } from "./tasksStore";
+import {
+  DEFAULT_TASK_STATUS,
+  isTaskStatus,
+  type TaskStatus
+} from "./taskStatus";
 
 type TaskCreateBody = {
   title: string;
   description?: string;
   projectId?: string;
+  status?: TaskStatus;
 };
 
 type TaskUpdateBody = {
   title?: string;
   description?: string;
   projectId?: string | null;
-  completed?: boolean;
+  status?: TaskStatus;
 };
 
 
@@ -74,11 +80,14 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
       }
 
       const now = new Date().toISOString();
+      const desiredStatus = isTaskStatus(request.body.status)
+        ? request.body.status
+        : undefined;
       const newTask: TaskRecord = {
         id: randomUUID(),
         title: trimmedTitle,
         description: request.body.description?.trim() ?? "",
-        completed: false,
+        status: desiredStatus ?? DEFAULT_TASK_STATUS,
         projectId,
         createdBy: username,
         createdAt: now,
@@ -124,8 +133,11 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
         updates.description = request.body.description.trim();
       }
 
-      if (typeof request.body.completed === "boolean") {
-        updates.completed = request.body.completed;
+      if (request.body.status !== undefined) {
+        if (!isTaskStatus(request.body.status)) {
+          return reply.status(400).send({ message: "Invalid task status" });
+        }
+        updates.status = request.body.status;
       }
 
       if (request.body.projectId !== undefined) {
