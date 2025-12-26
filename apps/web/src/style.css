@@ -993,13 +993,6 @@ label {
   border-bottom: 1px solid var(--surface-border);
 }
 
-.task-number-cell {
-  width: 40px;
-  text-align: center;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
 .tasks-table th {
   text-align: left;
   font-size: 0.75rem;

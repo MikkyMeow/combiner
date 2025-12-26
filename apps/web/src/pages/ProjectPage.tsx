@@ -41,6 +41,7 @@ const ProjectPage = (props: ProjectPageProps) => {
   const [error, setError] = createSignal<string | null>(null);
   const [creating, setCreating] = createSignal(false);
   const [newTitle, setNewTitle] = createSignal("");
+  const [newDescription, setNewDescription] = createSignal("");
   const [noteTitle, setNoteTitle] = createSignal("");
   const [noteContent, setNoteContent] = createSignal("");
   const [noteTags, setNoteTags] = createSignal("");
@@ -218,6 +219,7 @@ const ProjectPage = (props: ProjectPageProps) => {
         headers: getHeaders(),
         body: JSON.stringify({
           title,
+          description: newDescription().trim(),
           projectId: currentProject.id
         })
       });
@@ -230,6 +232,7 @@ const ProjectPage = (props: ProjectPageProps) => {
       const created = (await response.json()) as Task;
       setTasks((current) => [created, ...current]);
       setNewTitle("");
+      setNewDescription("");
       notify("Task created", "success");
     } catch (fetchError) {
       const message = (fetchError as Error).message || "Unable to create task.";
@@ -492,19 +495,29 @@ const ProjectPage = (props: ProjectPageProps) => {
       <Show when={!loading() && project() && activeTab() === "tasks"}>
         <section class="tasks-panel">
           <form class="task-form" onSubmit={handleCreateTask}>
-          <label>
-            Title
-            <input
-              class="text-input"
-              value={newTitle()}
-              onInput={(event) => setNewTitle(event.currentTarget.value)}
-              placeholder="Task title"
-              required
-            />
-          </label>
-          <button class="primary" type="submit" disabled={creating()}>
-            {creating() ? "Saving..." : "Add task"}
-          </button>
+            <label>
+              Title
+              <input
+                class="text-input"
+                value={newTitle()}
+                onInput={(event) => setNewTitle(event.currentTarget.value)}
+                placeholder="Task title"
+                required
+              />
+            </label>
+            <label>
+              Description (optional)
+              <textarea
+                class="text-input"
+                value={newDescription()}
+                onInput={(event) => setNewDescription(event.currentTarget.value)}
+                rows={3}
+                placeholder="Describe what needs to be done"
+              />
+            </label>
+            <button class="primary" type="submit" disabled={creating()}>
+              {creating() ? "Saving..." : "Add task"}
+            </button>
           </form>
 
           <p class="helper-text">
@@ -520,7 +533,6 @@ const ProjectPage = (props: ProjectPageProps) => {
               <table class="tasks-table">
                 <thead>
                   <tr>
-                    <th>#</th>
                     <th>Title &amp; description</th>
                     <th>Status</th>
                     <th>Updated</th>
@@ -529,9 +541,8 @@ const ProjectPage = (props: ProjectPageProps) => {
                 </thead>
                 <tbody>
                   <For each={tasks()}>
-                    {(task, index) => (
+                    {(task) => (
                       <tr class={task.completed ? "completed" : ""}>
-                        <td class="task-number-cell">{index() + 1}</td>
                         <td>
                           <strong>{task.title}</strong>
                           <p class="table-description">
