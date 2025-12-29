@@ -960,6 +960,13 @@ label {
   gap: 0.75rem;
   min-height: 220px;
   user-select: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.kanban-column--drag-over {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.45), 0 12px 24px rgba(15, 23, 42, 0.25);
+  transform: translateY(-2px);
 }
 
 .kanban-column__header {
@@ -973,6 +980,15 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  min-height: 140px;
+  padding: 0.25rem;
+  border-radius: 14px;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.kanban-column__list--drag-over {
+  background: rgba(96, 165, 250, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.35);
 }
 
 .kanban-card {
@@ -985,6 +1001,22 @@ label {
   gap: 0.35rem;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
   user-select: none;
+  cursor: grab;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.kanban-card:active {
+  cursor: grabbing;
+}
+
+.kanban-card--dragging {
+  opacity: 0.65;
+  transform: rotate(1deg) scale(1.02);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.3);
+}
+
+.kanban-card--moved {
+  animation: kanban-drop-pop 0.35s ease;
 }
 
 .kanban-card-actions {
@@ -997,6 +1029,20 @@ label {
   margin: 0;
   font-size: 0.85rem;
   color: var(--text-muted);
+}
+
+@keyframes kanban-drop-pop {
+  0% {
+    transform: translateY(-4px) scale(0.98);
+  }
+
+  60% {
+    transform: translateY(2px) scale(1.01);
+  }
+
+  100% {
+    transform: translateY(0) scale(1);
+  }
 }
 
 @media (max-width: 768px) {
@@ -1015,6 +1061,7 @@ label {
   .teams-layout {
     grid-template-columns: 1fr;
   }
+
   .teams-layout__chat {
     min-height: auto;
   }
@@ -1195,7 +1242,6 @@ label {
   color: var(--text-muted);
   gap: 0.25rem;
 }
-}
 
 .notification-stack {
   position: fixed;
@@ -1357,4 +1403,3 @@ label {
   gap: 0.4rem;
   flex-wrap: wrap;
 }
-

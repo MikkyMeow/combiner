@@ -50,6 +50,9 @@ const ProjectPage = (props: ProjectPageProps) => {
   const [memberUsername, setMemberUsername] = createSignal("");
   const [invitingMember, setInvitingMember] = createSignal(false);
   const [activeTab, setActiveTab] = createSignal<"tasks" | "notes">("tasks");
+  const [draggingTaskId, setDraggingTaskId] = createSignal<string | null>(null);
+  const [dragOverStatus, setDragOverStatus] = createSignal<TaskStatus | null>(null);
+  const [recentlyMovedTaskId, setRecentlyMovedTaskId] = createSignal<string | null>(null);
 
   onMount(() => {
     if (typeof window === "undefined") return;
@@ -424,6 +427,68 @@ const ProjectPage = (props: ProjectPageProps) => {
     props.onNavigate?.(`/tasks/${encodeURIComponent(task.id)}`);
   };
 
+  const handleDragStart = (task: TaskRecord, event: DragEvent) => {
+    setDraggingTaskId(task.id);
+    setDragOverStatus(task.status);
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", task.id);
+      event.dataTransfer.setData("application/x-kanban-task", task.id);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggingTaskId(null);
+    setDragOverStatus(null);
+  };
+
+  const handleDragOver = (status: TaskStatus, event: DragEvent) => {
+    event.preventDefault();
+    setDragOverStatus(status);
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "move";
+    }
+  };
+
+  const handleDragLeave = (status: TaskStatus, event: DragEvent) => {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+    if (dragOverStatus() === status) {
+      setDragOverStatus(null);
+    }
+  };
+
+  const handleDrop = async (status: TaskStatus, event: DragEvent) => {
+    event.preventDefault();
+    const draggedId =
+      draggingTaskId() ||
+      event.dataTransfer?.getData("application/x-kanban-task") ||
+      event.dataTransfer?.getData("text/plain") ||
+      null;
+    if (!draggedId) return;
+
+    setDragOverStatus(null);
+    setDraggingTaskId(null);
+
+    const previousTasks = tasks();
+    const draggedTask = previousTasks.find((task) => task.id === draggedId);
+    if (!draggedTask || draggedTask.status === status) return;
+
+    setTasks((current) =>
+      current.map((task) => (task.id === draggedId ? { ...task, status } : task))
+    );
+    setRecentlyMovedTaskId(draggedId);
+    window.setTimeout(() => {
+      if (recentlyMovedTaskId() === draggedId) {
+        setRecentlyMovedTaskId(null);
+      }
+    }, 450);
+
+    const updated = await updateTask(draggedId, { status }, "Task moved");
+    if (!updated) {
+      setTasks(previousTasks);
+    }
+  };
+
   return (
     <section class="project-detail-layout">
       <div class="project-header">
@@ -625,19 +690,41 @@ const ProjectPage = (props: ProjectPageProps) => {
               <div class="kanban-board">
                 <For each={TASK_STATUS_OPTIONS}>
                   {(status) => {
-                    const columnTasks = getTasksByStatus(status);
+                    const columnTasks = () => getTasksByStatus(status);
                     return (
-                      <section class="kanban-column">
+                      <section
+                        classList={{
+                          "kanban-column": true,
+                          "kanban-column--drag-over": dragOverStatus() === status
+                        }}
+                        onDragOver={(event) => handleDragOver(status, event)}
+                        onDragLeave={(event) => handleDragLeave(status, event)}
+                        onDrop={(event) => void handleDrop(status, event)}
+                      >
                         <div class="kanban-column__header">
                           <strong>{status}</strong>
                           <span class="helper-text">
-                            {columnTasks.length} task{columnTasks.length === 1 ? "" : "s"}
+                            {columnTasks().length} task{columnTasks().length === 1 ? "" : "s"}
                           </span>
                         </div>
-                        <div class="kanban-column__list">
-                          <For each={columnTasks}>
+                        <div
+                          classList={{
+                            "kanban-column__list": true,
+                            "kanban-column__list--drag-over": dragOverStatus() === status
+                          }}
+                        >
+                          <For each={columnTasks()}>
                             {(task) => (
-                              <article class="kanban-card">
+                              <article
+                                classList={{
+                                  "kanban-card": true,
+                                  "kanban-card--dragging": draggingTaskId() === task.id,
+                                  "kanban-card--moved": recentlyMovedTaskId() === task.id
+                                }}
+                                draggable={true}
+                                onDragStart={(event) => handleDragStart(task, event)}
+                                onDragEnd={handleDragEnd}
+                              >
                                 <strong>{task.title}</strong>
                                 <p class="table-description">
                                   {task.description || "No description provided."}
@@ -664,7 +751,7 @@ const ProjectPage = (props: ProjectPageProps) => {
                               </article>
                             )}
                           </For>
-                          <Show when={columnTasks.length === 0}>
+                          <Show when={columnTasks().length === 0}>
                             <p class="helper-text kanban-empty">No tasks yet.</p>
                           </Show>
                         </div>
