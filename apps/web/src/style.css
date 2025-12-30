@@ -1173,6 +1173,52 @@ label {
   line-height: 1.3;
 }
 
+.task-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+
+.task-tag {
+  padding: 0.15rem 0.4rem 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(96, 165, 250, 0.2);
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.task-tag__remove {
+  border: none;
+  background: rgba(15, 23, 42, 0.25);
+  color: inherit;
+  cursor: pointer;
+  border-radius: 999px;
+  padding: 0.05rem 0.35rem;
+  font-size: 0.65rem;
+  line-height: 1;
+}
+
+.task-tag__remove:hover {
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.task-tags-input {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.task-tags-input .text-input {
+  flex: 1;
+  min-width: 200px;
+}
+
 .ghost {
   border: 1px solid var(--surface-border);
   background: transparent;

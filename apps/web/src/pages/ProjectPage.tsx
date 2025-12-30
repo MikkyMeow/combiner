@@ -56,6 +56,7 @@ const ProjectPage = (props: ProjectPageProps) => {
   const [dragOverStatus, setDragOverStatus] = createSignal<TaskStatus | null>(null);
   const [recentlyMovedTaskId, setRecentlyMovedTaskId] = createSignal<string | null>(null);
   const [taskSearchTerm, setTaskSearchTerm] = createSignal("");
+  const [taskTagSearch, setTaskTagSearch] = createSignal("");
   const [taskStatusFilter, setTaskStatusFilter] = createSignal<TaskStatus | "">("");
   const [taskSortField, setTaskSortField] = createSignal<TaskSortField | null>(null);
   const [taskSortOrder, setTaskSortOrder] = createSignal<TaskSortOrder>("asc");
@@ -134,6 +135,16 @@ const ProjectPage = (props: ProjectPageProps) => {
         return false;
       }
     }
+    const tagSearch = parseTags(taskTagSearch()).map((tag) => tag.toLowerCase());
+    if (tagSearch.length > 0) {
+      const taskTags = task.tags?.map((tag) => tag.toLowerCase()) ?? [];
+      const hasMatch = tagSearch.some((needle) =>
+        taskTags.some((tag) => tag.includes(needle))
+      );
+      if (!hasMatch) {
+        return false;
+      }
+    }
     const status = taskStatusFilter();
     if (status && task.status !== status) {
       return false;
@@ -145,6 +156,7 @@ const ProjectPage = (props: ProjectPageProps) => {
     projectId: string,
     options?: {
       taskSearch?: string;
+      taskTags?: string[];
       taskStatus?: TaskStatus | "";
       taskSortField?: TaskSortField | null;
       taskSortOrder?: TaskSortOrder;
@@ -173,6 +185,9 @@ const ProjectPage = (props: ProjectPageProps) => {
       const trimmedSearch = options?.taskSearch?.trim();
       if (trimmedSearch) {
         url.searchParams.set("task_search", trimmedSearch);
+      }
+      if (options?.taskTags && options.taskTags.length > 0) {
+        url.searchParams.set("task_tags", options.taskTags.join(","));
       }
       if (options?.taskStatus) {
         url.searchParams.set("task_status", options.taskStatus);
@@ -208,6 +223,7 @@ const ProjectPage = (props: ProjectPageProps) => {
 
   const scheduleTaskFetch = (
     searchValue: string,
+    tagValue: string,
     statusValue: TaskStatus | "",
     field: TaskSortField | null,
     order: TaskSortOrder
@@ -220,6 +236,7 @@ const ProjectPage = (props: ProjectPageProps) => {
       if (!projectId) return;
       void fetchProject(projectId, {
         taskSearch: searchValue,
+        taskTags: parseTags(tagValue),
         taskStatus: statusValue,
         taskSortField: field,
         taskSortOrder: order,
@@ -233,7 +250,13 @@ const ProjectPage = (props: ProjectPageProps) => {
   const handleTaskSearchInput = (event: InputEvent) => {
     const value = event.currentTarget.value;
     setTaskSearchTerm(value);
-    scheduleTaskFetch(value, taskStatusFilter(), taskSortField(), taskSortOrder());
+    scheduleTaskFetch(value, taskTagSearch(), taskStatusFilter(), taskSortField(), taskSortOrder());
+  };
+
+  const handleTaskTagSearchInput = (event: InputEvent) => {
+    const value = event.currentTarget.value;
+    setTaskTagSearch(value);
+    scheduleTaskFetch(taskSearchTerm(), value, taskStatusFilter(), taskSortField(), taskSortOrder());
   };
 
   const handleClearTaskSearch = () => {
@@ -249,6 +272,29 @@ const ProjectPage = (props: ProjectPageProps) => {
     if (!projectId) return;
     void fetchProject(projectId, {
       taskSearch: "",
+      taskTags: parseTags(taskTagSearch()),
+      taskStatus: taskStatusFilter(),
+      taskSortField: taskSortField(),
+      taskSortOrder: taskSortOrder(),
+      preserveData: true,
+      showLoading: false
+    });
+  };
+
+  const handleClearTaskTagSearch = () => {
+    if (!taskTagSearch()) {
+      return;
+    }
+    if (taskSearchDebounce) {
+      clearTimeout(taskSearchDebounce);
+      taskSearchDebounce = undefined;
+    }
+    setTaskTagSearch("");
+    const projectId = props.projectId?.trim();
+    if (!projectId) return;
+    void fetchProject(projectId, {
+      taskSearch: taskSearchTerm(),
+      taskTags: [],
       taskStatus: taskStatusFilter(),
       taskSortField: taskSortField(),
       taskSortOrder: taskSortOrder(),
@@ -260,20 +306,20 @@ const ProjectPage = (props: ProjectPageProps) => {
   const handleTaskStatusFilterChange = (event: InputEvent) => {
     const value = event.currentTarget.value as TaskStatus | "";
     setTaskStatusFilter(value);
-    scheduleTaskFetch(taskSearchTerm(), value, taskSortField(), taskSortOrder());
+    scheduleTaskFetch(taskSearchTerm(), taskTagSearch(), value, taskSortField(), taskSortOrder());
   };
 
   const handleTaskSortFieldChange = (event: InputEvent) => {
     const value = event.currentTarget.value;
     const field = value ? (value as TaskSortField) : null;
     setTaskSortField(field);
-    scheduleTaskFetch(taskSearchTerm(), taskStatusFilter(), field, taskSortOrder());
+    scheduleTaskFetch(taskSearchTerm(), taskTagSearch(), taskStatusFilter(), field, taskSortOrder());
   };
 
   const handleTaskSortOrderChange = (event: InputEvent) => {
     const value = event.currentTarget.value as TaskSortOrder;
     setTaskSortOrder(value);
-    scheduleTaskFetch(taskSearchTerm(), taskStatusFilter(), taskSortField(), value);
+    scheduleTaskFetch(taskSearchTerm(), taskTagSearch(), taskStatusFilter(), taskSortField(), value);
   };
 
   createEffect(() => {
@@ -290,6 +336,7 @@ const ProjectPage = (props: ProjectPageProps) => {
 
     const options = untrack(() => ({
       taskSearch: taskSearchTerm(),
+      taskTags: parseTags(taskTagSearch()),
       taskStatus: taskStatusFilter(),
       taskSortField: taskSortField(),
       taskSortOrder: taskSortOrder()
@@ -748,9 +795,22 @@ const ProjectPage = (props: ProjectPageProps) => {
                 placeholder="Search by title or description"
                 aria-label="Search tasks"
               />
+              <input
+                type="search"
+                class="text-input"
+                value={taskTagSearch()}
+                onInput={handleTaskTagSearchInput}
+                placeholder="Search by tags"
+                aria-label="Search tasks by tags"
+              />
               <Show when={taskSearchTerm()}>
                 <button type="button" class="ghost" onClick={handleClearTaskSearch}>
                   Clear
+                </button>
+              </Show>
+              <Show when={taskTagSearch()}>
+                <button type="button" class="ghost" onClick={handleClearTaskTagSearch}>
+                  Clear tags
                 </button>
               </Show>
             </div>
@@ -855,6 +915,11 @@ const ProjectPage = (props: ProjectPageProps) => {
                                     <p class="table-description">
                                       {task.description || "No description provided."}
                                     </p>
+                                    <Show when={(task.tags ?? []).length > 0}>
+                                      <div class="task-tags">
+                                        <For each={task.tags}>{(tag) => <span class="task-tag">{tag}</span>}</For>
+                                      </div>
+                                    </Show>
                                   </td>
                                   <td>
                                     <div class="status-cell">
@@ -952,6 +1017,11 @@ const ProjectPage = (props: ProjectPageProps) => {
                                 <p class="table-description">
                                   {task.description || "No description provided."}
                                 </p>
+                                <Show when={(task.tags ?? []).length > 0}>
+                                  <div class="task-tags">
+                                    <For each={task.tags}>{(tag) => <span class="task-tag">{tag}</span>}</For>
+                                  </div>
+                                </Show>
                                 <p class="helper-text">
                                   Updated {new Date(task.updatedAt).toLocaleString()}
                                 </p>

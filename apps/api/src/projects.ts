@@ -125,6 +125,18 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
     return null;
   };
 
+  const parseTaskTags = (value: string | string[] | undefined): string[] | undefined => {
+    if (!value) {
+      return undefined;
+    }
+    const values = Array.isArray(value) ? value : [value];
+    const tags = values
+      .flatMap((entry) => entry.split(","))
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+    return tags.length ? tags : undefined;
+  };
+
   server.get<{
     Querystring: {
       search?: string;
@@ -166,6 +178,7 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
     Querystring: {
       task_search?: string;
       task_status?: string | string[];
+      task_tags?: string | string[];
       task_sort_by?: string;
       task_order?: string;
     };
@@ -194,12 +207,14 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
           .filter((entry): entry is TaskStatus => !!entry);
         return parsed.length ? parsed : undefined;
       })();
+      const requestedTags = parseTaskTags(request.query.task_tags);
       const sortField = parseTaskSortField(request.query.task_sort_by);
       const sortOrder = sortField ? parseTaskSortOrder(request.query.task_order) ?? "asc" : undefined;
       const tasks = findTasksForProject(
         project.id,
         normalizedSearch?.length ? normalizedSearch : undefined,
         requestedStatuses,
+        requestedTags,
         sortField,
         sortOrder
       );

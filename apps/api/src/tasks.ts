@@ -24,6 +24,7 @@ type TaskCreateBody = {
   assignee?: string | null;
   priority?: string | null;
   dueDate?: string | null;
+  tags?: string[];
 };
 
 type TaskUpdateBody = {
@@ -34,6 +35,7 @@ type TaskUpdateBody = {
   assignee?: string | null;
   priority?: string | null;
   dueDate?: string | null;
+  tags?: string[];
 };
 
 type TaskSortFieldValue = TaskSortField;
@@ -42,6 +44,27 @@ type TaskSortOrderValue = TaskSortOrder;
 const normalizeOptionalText = (value?: string | null) => {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
+};
+
+const normalizeTags = (value: string[]): string[] => {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  value.forEach((entry) => {
+    if (typeof entry !== "string") {
+      return;
+    }
+    const trimmed = entry.trim();
+    if (!trimmed) {
+      return;
+    }
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    normalized.push(trimmed);
+  });
+  return normalized;
 };
 
 const tasksRoutes: FastifyPluginAsync = async (server) => {
@@ -148,11 +171,16 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
         }
       }
 
+      if (request.body.tags !== undefined && !Array.isArray(request.body.tags)) {
+        return reply.status(400).send({ message: "Tags must be an array of strings" });
+      }
+
       const now = new Date().toISOString();
       const newTask: TaskRecord = {
         id: randomUUID(),
         title: trimmedTitle,
         description: "",
+        tags: request.body.tags ? normalizeTags(request.body.tags) : [],
         status: DEFAULT_TASK_STATUS,
         projectId,
         assignee: normalizeOptionalText(request.body.assignee),
@@ -232,6 +260,13 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
 
       if (request.body.dueDate !== undefined) {
         updates.dueDate = normalizeOptionalText(request.body.dueDate);
+      }
+
+      if (request.body.tags !== undefined) {
+        if (!Array.isArray(request.body.tags)) {
+          return reply.status(400).send({ message: "Tags must be an array of strings" });
+        }
+        updates.tags = normalizeTags(request.body.tags);
       }
 
       const updated = updateTask(taskRow.id, updates);

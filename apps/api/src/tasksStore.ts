@@ -5,6 +5,7 @@ export type TaskRecord = {
   id: string;
   title: string;
   description: string;
+  tags: string[];
   status: TaskStatus;
   projectId: string | null;
   assignee: string | null;
@@ -22,6 +23,7 @@ const mapRow = (row: TaskRow): TaskRecord => ({
   id: row.id,
   title: row.title,
   description: row.description,
+  tags: row.tags ?? [],
   status: row.status,
   projectId: row.projectId,
   assignee: row.assignee,
@@ -87,11 +89,13 @@ export const findTasksForProject = (
   projectId: string,
   search?: string,
   status?: TaskStatus[],
+  tags?: string[],
   sortField?: TaskSortField | null,
   sortOrder?: TaskSortOrder
 ): TaskRecord[] => {
   const state = loadDatabase();
   const normalizedSearch = search?.trim().toLowerCase();
+  const normalizedTags = tags?.map((tag) => tag.trim().toLowerCase()).filter(Boolean);
   const filtered = state.tasks
     .filter((task) => task.projectId === projectId)
     .filter((task) => {
@@ -99,6 +103,15 @@ export const findTasksForProject = (
         return true;
       }
       return status.includes(task.status);
+    })
+    .filter((task) => {
+      if (!normalizedTags || normalizedTags.length === 0) {
+        return true;
+      }
+      const taskTags = (task.tags ?? []).map((tag) => tag.toLowerCase());
+      return normalizedTags.some((needle) =>
+        taskTags.some((tag) => tag.includes(needle))
+      );
     })
     .filter((task) => {
       if (!normalizedSearch) {
@@ -152,6 +165,7 @@ export const insertTask = (username: string, task: TaskRecord): TaskRecord => {
 type TaskUpdatePayload = {
   title?: string;
   description?: string;
+  tags?: string[];
   status?: TaskStatus;
   projectId?: string | null;
   assignee?: string | null;
@@ -173,6 +187,10 @@ export const updateTask = (taskId: string, payload: TaskUpdatePayload): TaskReco
 
   if (payload.description !== undefined) {
     target.description = payload.description;
+  }
+
+  if (payload.tags !== undefined) {
+    target.tags = payload.tags;
   }
 
   if (payload.status !== undefined) {

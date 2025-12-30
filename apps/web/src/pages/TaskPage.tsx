@@ -38,6 +38,20 @@ const toDateInputValue = (value: string | null) => {
   return parsed.toISOString().slice(0, 10);
 };
 
+const mergeTags = (current: string[], additions: string[]) => {
+  const seen = new Set(current.map((tag) => tag.toLowerCase()));
+  const merged = current.slice();
+  additions.forEach((tag) => {
+    const trimmed = tag.trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push(trimmed);
+  });
+  return merged;
+};
+
 const TaskPage = (props: TaskPageProps) => {
   const [task, setTask] = createSignal<TaskRecord | null>(null);
   const [title, setTitle] = createSignal("");
@@ -46,6 +60,8 @@ const TaskPage = (props: TaskPageProps) => {
   const [assignee, setAssignee] = createSignal("");
   const [priority, setPriority] = createSignal("");
   const [dueDate, setDueDate] = createSignal("");
+  const [tags, setTags] = createSignal<string[]>([]);
+  const [tagInput, setTagInput] = createSignal("");
   const [companyMembers, setCompanyMembers] = createSignal<CompanyMember[]>([]);
   const [membersLoading, setMembersLoading] = createSignal(false);
   const [membersError, setMembersError] = createSignal<string | null>(null);
@@ -147,6 +163,7 @@ const TaskPage = (props: TaskPageProps) => {
       setAssignee(found.assignee ?? "");
       setPriority(found.priority ?? "");
       setDueDate(toDateInputValue(found.dueDate ?? null));
+      setTags(found.tags ?? []);
     } catch (fetchError) {
       const message = (fetchError as Error).message || "Unable to load task.";
       setError(message);
@@ -216,6 +233,7 @@ const TaskPage = (props: TaskPageProps) => {
       assignee: string | null;
       priority: string | null;
       dueDate: string | null;
+      tags: string[];
     }>,
     successMessage?: string
   ) => {
@@ -245,6 +263,7 @@ const TaskPage = (props: TaskPageProps) => {
       setAssignee(updated.assignee ?? "");
       setPriority(updated.priority ?? "");
       setDueDate(toDateInputValue(updated.dueDate ?? null));
+      setTags(updated.tags ?? []);
       if (successMessage) {
         notify(successMessage, "success");
       }
@@ -282,7 +301,8 @@ const TaskPage = (props: TaskPageProps) => {
           description: description().trim(),
           assignee: assignee().trim() || null,
           priority: priority().trim() || null,
-          dueDate: dueDate().trim() || null
+          dueDate: dueDate().trim() || null,
+          tags: tags()
         },
         "Task saved"
       );
@@ -298,6 +318,36 @@ const TaskPage = (props: TaskPageProps) => {
       return;
     }
     void updateTask(current.id, { status: nextStatus }, "Task status updated");
+  };
+
+  const handleAddTag = async () => {
+    const current = task();
+    if (!current) return;
+
+    const input = tagInput().trim();
+    if (!input) return;
+    const additions = input.split(",").map((tag) => tag.trim());
+    const nextTags = mergeTags(tags(), additions);
+    if (nextTags.length === tags().length) {
+      setTagInput("");
+      return;
+    }
+
+    setTagInput("");
+    void updateTask(current.id, { tags: nextTags }, "Tags updated");
+  };
+
+  const handleTagInputKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    void handleAddTag();
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    const current = task();
+    if (!current) return;
+    const nextTags = tags().filter((tag) => tag.toLowerCase() !== tagToRemove.toLowerCase());
+    void updateTask(current.id, { tags: nextTags }, "Tags updated");
   };
 
   const handleBack = () => {
@@ -397,6 +447,45 @@ const TaskPage = (props: TaskPageProps) => {
               value={description()}
               onInput={(event) => setDescription(event.currentTarget.value)}
             />
+          </label>
+          <label>
+            Tags
+            <Show when={tags().length > 0} fallback={<span class="helper-text">No tags yet.</span>}>
+              <div class="task-tags">
+                <For each={tags()}>
+                  {(tag) => (
+                    <span class="task-tag">
+                      {tag}
+                      <button
+                        type="button"
+                        class="task-tag__remove"
+                        onClick={() => handleRemoveTag(tag)}
+                        aria-label={`Remove tag ${tag}`}
+                      >
+                        x
+                      </button>
+                    </span>
+                  )}
+                </For>
+              </div>
+            </Show>
+            <div class="task-tags-input">
+              <input
+                class="text-input"
+                value={tagInput()}
+                onInput={(event) => setTagInput(event.currentTarget.value)}
+                onKeyDown={handleTagInputKeyDown}
+                placeholder="Add tag (comma separated)"
+              />
+              <button
+                type="button"
+                class="ghost"
+                onClick={handleAddTag}
+                disabled={!tagInput().trim()}
+              >
+                Add
+              </button>
+            </div>
           </label>
           <label>
             Assignee
