@@ -7,6 +7,9 @@ export type TaskRecord = {
   description: string;
   status: TaskStatus;
   projectId: string | null;
+  assignee: string | null;
+  priority: string | null;
+  dueDate: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -18,6 +21,9 @@ const mapRow = (row: TaskRow): TaskRecord => ({
   description: row.description,
   status: row.status,
   projectId: row.projectId,
+  assignee: row.assignee,
+  priority: row.priority,
+  dueDate: row.dueDate,
   createdBy: row.createdBy ?? row.username,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt
@@ -59,6 +65,9 @@ type TaskUpdatePayload = {
   description?: string;
   status?: TaskStatus;
   projectId?: string | null;
+  assignee?: string | null;
+  priority?: string | null;
+  dueDate?: string | null;
   updatedAt: string;
 };
 
@@ -83,6 +92,18 @@ export const updateTask = (taskId: string, payload: TaskUpdatePayload): TaskReco
 
   if (payload.projectId !== undefined) {
     target.projectId = payload.projectId;
+  }
+
+  if (payload.assignee !== undefined) {
+    target.assignee = payload.assignee;
+  }
+
+  if (payload.priority !== undefined) {
+    target.priority = payload.priority;
+  }
+
+  if (payload.dueDate !== undefined) {
+    target.dueDate = payload.dueDate;
   }
 
   target.updatedAt = payload.updatedAt;

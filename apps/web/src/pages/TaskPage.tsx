@@ -1,4 +1,4 @@
-import { createEffect, createSignal, Show } from "solid-js";
+import { createEffect, createSignal, For, Show } from "solid-js";
 import type { NotificationType } from "../components/notifications/useNotifications";
 import {
   TASK_STATUS_OPTIONS,
@@ -16,11 +16,39 @@ type TaskPageProps = {
   onUnauthorized?: () => void;
 };
 
+type CompanyMember = {
+  username: string;
+  role: string;
+  company: string | null;
+};
+
+const PRIORITY_OPTIONS = ["low", "normal", "high", "critical"] as const;
+
+const toDateInputValue = (value: string | null) => {
+  if (!value) {
+    return "";
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+  return parsed.toISOString().slice(0, 10);
+};
+
 const TaskPage = (props: TaskPageProps) => {
   const [task, setTask] = createSignal<TaskRecord | null>(null);
   const [title, setTitle] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [status, setStatus] = createSignal<TaskStatus>(TASK_STATUS_OPTIONS[0]);
+  const [assignee, setAssignee] = createSignal("");
+  const [priority, setPriority] = createSignal("");
+  const [dueDate, setDueDate] = createSignal("");
+  const [companyMembers, setCompanyMembers] = createSignal<CompanyMember[]>([]);
+  const [membersLoading, setMembersLoading] = createSignal(false);
+  const [membersError, setMembersError] = createSignal<string | null>(null);
   const [loading, setLoading] = createSignal(true);
   const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
@@ -65,6 +93,24 @@ const TaskPage = (props: TaskPageProps) => {
     notify(message, "error");
   };
 
+  const handleMembersError = async (response: Response) => {
+    if (response.status === 401) {
+      props.onUnauthorized?.();
+      return;
+    }
+    let message = `${response.status} ${response.statusText}`;
+    try {
+      const payload = (await response.json()) as { message?: string };
+      if (payload?.message) {
+        message = payload.message;
+      }
+    } catch {
+      /* ignore */
+    }
+    setMembersError(message);
+    setCompanyMembers([]);
+  };
+
   const loadTask = async (id: string) => {
     if (!props.jwtToken) {
       handleUnauthorized();
@@ -98,12 +144,46 @@ const TaskPage = (props: TaskPageProps) => {
       setTitle(found.title);
       setDescription(found.description ?? "");
       setStatus(found.status);
+      setAssignee(found.assignee ?? "");
+      setPriority(found.priority ?? "");
+      setDueDate(toDateInputValue(found.dueDate ?? null));
     } catch (fetchError) {
       const message = (fetchError as Error).message || "Unable to load task.";
       setError(message);
       notify(message, "error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadCompanyMembers = async () => {
+    if (!props.jwtToken) {
+      setCompanyMembers([]);
+      setMembersError(null);
+      return;
+    }
+
+    setMembersLoading(true);
+    setMembersError(null);
+    try {
+      const response = await fetch(`${apiUrl()}/me/company/members`, {
+        headers: getHeaders()
+      });
+
+      if (!response.ok) {
+        await handleMembersError(response);
+        return;
+      }
+
+      const payload = (await response.json()) as { members: CompanyMember[] };
+      setCompanyMembers(payload.members ?? []);
+    } catch (fetchError) {
+      const message =
+        (fetchError as Error).message || "Unable to load company members.";
+      setMembersError(message);
+      setCompanyMembers([]);
+    } finally {
+      setMembersLoading(false);
     }
   };
 
@@ -118,9 +198,25 @@ const TaskPage = (props: TaskPageProps) => {
     void loadTask(id);
   });
 
+  createEffect(() => {
+    if (!props.jwtToken) {
+      setCompanyMembers([]);
+      setMembersError(null);
+      return;
+    }
+    void loadCompanyMembers();
+  });
+
   const updateTask = async (
     id: string,
-    body: Partial<{ title: string; description: string; status: TaskStatus }>,
+    body: Partial<{
+      title: string;
+      description: string;
+      status: TaskStatus;
+      assignee: string | null;
+      priority: string | null;
+      dueDate: string | null;
+    }>,
     successMessage?: string
   ) => {
     if (!props.jwtToken) {
@@ -146,6 +242,9 @@ const TaskPage = (props: TaskPageProps) => {
       setTitle(updated.title);
       setDescription(updated.description ?? "");
       setStatus(updated.status);
+      setAssignee(updated.assignee ?? "");
+      setPriority(updated.priority ?? "");
+      setDueDate(toDateInputValue(updated.dueDate ?? null));
       if (successMessage) {
         notify(successMessage, "success");
       }
@@ -178,7 +277,13 @@ const TaskPage = (props: TaskPageProps) => {
     try {
       await updateTask(
         current.id,
-        { title: trimmedTitle, description: description().trim() },
+        {
+          title: trimmedTitle,
+          description: description().trim(),
+          assignee: assignee().trim() || null,
+          priority: priority().trim() || null,
+          dueDate: dueDate().trim() || null
+        },
         "Task saved"
       );
     } finally {
@@ -210,6 +315,17 @@ const TaskPage = (props: TaskPageProps) => {
       window.history.back();
     }
   };
+
+  const assigneeOptions = () => {
+    const members = companyMembers().map((member) => member.username);
+    const current = assignee().trim();
+    if (current && !members.includes(current)) {
+      return [current, ...members];
+    }
+    return members;
+  };
+
+  const todayDate = () => new Date().toISOString().slice(0, 10);
 
   return (
     <section class="tasks-card task-detail-card">
@@ -280,6 +396,49 @@ const TaskPage = (props: TaskPageProps) => {
               rows={3}
               value={description()}
               onInput={(event) => setDescription(event.currentTarget.value)}
+            />
+          </label>
+          <label>
+            Assignee
+            <select
+              class="text-input"
+              value={assignee()}
+              onInput={(event) => setAssignee(event.currentTarget.value)}
+              disabled={membersLoading() || !!membersError()}
+            >
+              <option value="">Unassigned</option>
+              <For each={assigneeOptions()}>
+                {(member) => <option value={member}>{member}</option>}
+              </For>
+            </select>
+            <Show when={membersLoading()}>
+              <span class="helper-text">Loading team members...</span>
+            </Show>
+            <Show when={membersError()}>
+              <span class="helper-text">{membersError()}</span>
+            </Show>
+          </label>
+          <label>
+            Priority
+            <select
+              class="text-input"
+              value={priority()}
+              onInput={(event) => setPriority(event.currentTarget.value)}
+            >
+              <option value="">Unspecified</option>
+              <For each={PRIORITY_OPTIONS}>
+                {(option) => <option value={option}>{option}</option>}
+              </For>
+            </select>
+          </label>
+          <label>
+            Due date
+            <input
+              class="text-input"
+              type="date"
+              min={todayDate()}
+              value={dueDate()}
+              onInput={(event) => setDueDate(event.currentTarget.value)}
             />
           </label>
           <div class="edit-actions">

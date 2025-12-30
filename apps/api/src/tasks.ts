@@ -18,6 +18,9 @@ import {
 type TaskCreateBody = {
   title: string;
   projectId?: string;
+  assignee?: string | null;
+  priority?: string | null;
+  dueDate?: string | null;
 };
 
 type TaskUpdateBody = {
@@ -25,8 +28,15 @@ type TaskUpdateBody = {
   description?: string;
   projectId?: string | null;
   status?: TaskStatus;
+  assignee?: string | null;
+  priority?: string | null;
+  dueDate?: string | null;
 };
 
+const normalizeOptionalText = (value?: string | null) => {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+};
 
 const tasksRoutes: FastifyPluginAsync = async (server) => {
   const ensureAuthenticated = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -84,6 +94,9 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
         description: "",
         status: DEFAULT_TASK_STATUS,
         projectId,
+        assignee: normalizeOptionalText(request.body.assignee),
+        priority: normalizeOptionalText(request.body.priority),
+        dueDate: normalizeOptionalText(request.body.dueDate),
         createdBy: username,
         createdAt: now,
         updatedAt: now
@@ -146,6 +159,18 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
           }
           updates.projectId = trimmedProjectId;
         }
+      }
+
+      if (request.body.assignee !== undefined) {
+        updates.assignee = normalizeOptionalText(request.body.assignee);
+      }
+
+      if (request.body.priority !== undefined) {
+        updates.priority = normalizeOptionalText(request.body.priority);
+      }
+
+      if (request.body.dueDate !== undefined) {
+        updates.dueDate = normalizeOptionalText(request.body.dueDate);
       }
 
       const updated = updateTask(taskRow.id, updates);

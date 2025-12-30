@@ -38,6 +38,9 @@ export type TaskRow = {
   description: string;
   status: TaskStatus;
   projectId: string | null;
+  assignee: string | null;
+  priority: string | null;
+  dueDate: string | null;
   createdAt: string;
   updatedAt: string;
   createdBy?: string;
@@ -75,9 +78,12 @@ type RawProjectRow = Omit<ProjectRow, "members" | "visibility"> & {
   visibility?: "private" | "corporate";
 };
 
-type RawTaskRow = Omit<TaskRow, "createdBy"> & {
+type RawTaskRow = Omit<TaskRow, "createdBy" | "assignee" | "priority" | "dueDate"> & {
   createdBy?: string;
   status?: TaskStatus;
+  assignee?: string | null;
+  priority?: string | null;
+  dueDate?: string | null;
 };
 
 type RawNoteRow = Omit<NoteRow, "projectId"> & {
@@ -118,6 +124,9 @@ const normalizeState = (payload: RawDatabaseState): DatabaseState => ({
   tasks: (payload.tasks ?? []).map((task) => ({
     ...task,
     status: task.status ?? DEFAULT_TASK_STATUS,
+    assignee: task.assignee ?? null,
+    priority: task.priority ?? null,
+    dueDate: task.dueDate ?? null,
     createdBy: task.createdBy ?? task.username
   })),
   notes: (payload.notes ?? []).map((note) => ({
@@ -137,7 +146,13 @@ export const loadDatabase = (): DatabaseState => {
       (user) => user.role === undefined || user.company === undefined
     ) ||
     (parsed.projects ?? []).some((project) => project.visibility === undefined) ||
-    (parsed.tasks ?? []).some((task) => task.status === undefined);
+    (parsed.tasks ?? []).some(
+      (task) =>
+        task.status === undefined ||
+        task.assignee === undefined ||
+        task.priority === undefined ||
+        task.dueDate === undefined
+    );
   if (needsSchemaUpdate) {
     saveDatabase(normalized);
   }

@@ -7,6 +7,9 @@ export type TaskRecord = {
   description: string;
   projectId: string | null;
   status: TaskStatus;
+  assignee: string | null;
+  priority: string | null;
+  dueDate: string | null;
   createdAt: string;
   updatedAt: string;
   createdBy: string;
