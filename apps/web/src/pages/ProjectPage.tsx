@@ -631,56 +631,88 @@ const ProjectPage = (props: ProjectPageProps) => {
                     </tr>
                   </thead>
                   <tbody>
-                    <For each={tasks()}>
-                      {(task) => (
-                        <tr class={`status-row ${getStatusRowClass(task.status)}`}>
-                          <td>
-                            <strong>{task.title}</strong>
-                            <p class="table-description">
-                              {task.description || "No description provided."}
-                            </p>
-                          </td>
-                          <td>
-                            <div class="status-cell">
-                              <span class={`status-pill ${getStatusPillClass(task.status)}`}>
-                                {task.status}
-                              </span>
-                              <select
-                                class="status-select"
-                                value={task.status}
-                                onInput={(event) =>
-                                  handleChangeStatus(task, event.currentTarget.value as TaskStatus)
-                                }
-                              >
-                                <For each={TASK_STATUS_OPTIONS}>
-                                  {(option) => <option value={option}>{option}</option>}
-                                </For>
-                              </select>
-                            </div>
-                          </td>
-                          <td>
-                            <span>Updated {new Date(task.updatedAt).toLocaleString()}</span>
-                          </td>
-                          <td>
-                            <div class="task-actions">
-                              <button
-                                type="button"
-                                class="ghost"
-                                onClick={() => viewTaskDetail(task)}
-                              >
-                                View
-                              </button>
-                              <button
-                                type="button"
-                                class="ghost"
-                                onClick={() => handleDelete(task.id)}
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
+                    <For each={TASK_STATUS_OPTIONS}>
+                      {(status) => {
+                        const statusTasks = () => getTasksByStatus(status);
+                        return (
+                          <>
+                            <tr class="status-group-row">
+                              <td colSpan={4}>
+                                <div class="status-group-header">
+                                  <span class={`status-pill ${getStatusPillClass(status)}`}>
+                                    {status}
+                                  </span>
+                                  <span class="helper-text">
+                                    {statusTasks().length} task
+                                    {statusTasks().length === 1 ? "" : "s"}
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                            <Show when={statusTasks().length === 0}>
+                              <tr class="status-group-empty">
+                                <td colSpan={4}>
+                                  <span class="helper-text">No tasks in this status.</span>
+                                </td>
+                              </tr>
+                            </Show>
+                            <For each={statusTasks()}>
+                              {(task) => (
+                                <tr class={`status-row ${getStatusRowClass(task.status)}`}>
+                                  <td>
+                                    <strong>{task.title}</strong>
+                                    <p class="table-description">
+                                      {task.description || "No description provided."}
+                                    </p>
+                                  </td>
+                                  <td>
+                                    <div class="status-cell">
+                                      <span class={`status-pill ${getStatusPillClass(task.status)}`}>
+                                        {task.status}
+                                      </span>
+                                      <select
+                                        class="status-select"
+                                        value={task.status}
+                                        onInput={(event) =>
+                                          handleChangeStatus(
+                                            task,
+                                            event.currentTarget.value as TaskStatus
+                                          )
+                                        }
+                                      >
+                                        <For each={TASK_STATUS_OPTIONS}>
+                                          {(option) => <option value={option}>{option}</option>}
+                                        </For>
+                                      </select>
+                                    </div>
+                                  </td>
+                                  <td>
+                                    <span>Updated {new Date(task.updatedAt).toLocaleString()}</span>
+                                  </td>
+                                  <td>
+                                    <div class="task-actions">
+                                      <button
+                                        type="button"
+                                        class="ghost"
+                                        onClick={() => viewTaskDetail(task)}
+                                      >
+                                        View
+                                      </button>
+                                      <button
+                                        type="button"
+                                        class="ghost"
+                                        onClick={() => handleDelete(task.id)}
+                                      >
+                                        Delete
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </For>
+                          </>
+                        );
+                      }}
                     </For>
                   </tbody>
                 </table>

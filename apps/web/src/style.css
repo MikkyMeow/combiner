@@ -1149,6 +1149,23 @@ label {
   background: rgba(248, 250, 252, 0.08);
 }
 
+.status-group-row td {
+  padding-top: 0.75rem;
+  padding-bottom: 0.35rem;
+  background: rgba(248, 250, 252, 0.04);
+}
+
+.status-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.status-group-empty td {
+  padding-top: 0;
+}
+
 .table-description {
   margin: 0.35rem 0 0;
   font-size: 0.75rem;
