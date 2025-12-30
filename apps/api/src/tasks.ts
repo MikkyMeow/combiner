@@ -20,11 +20,12 @@ import {
 
 type TaskCreateBody = {
   title: string;
-  projectId?: string;
+  projectId: string;
   assignee?: string | null;
   priority?: string | null;
   dueDate?: string | null;
   tags?: string[];
+  comments?: string[];
 };
 
 type TaskUpdateBody = {
@@ -36,6 +37,7 @@ type TaskUpdateBody = {
   priority?: string | null;
   dueDate?: string | null;
   tags?: string[];
+  comments?: string[];
 };
 
 type TaskSortFieldValue = TaskSortField;
@@ -65,6 +67,13 @@ const normalizeTags = (value: string[]): string[] => {
     normalized.push(trimmed);
   });
   return normalized;
+};
+
+const normalizeComments = (value: string[]): string[] => {
+  return value
+    .filter((entry) => typeof entry === "string")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
 };
 
 const tasksRoutes: FastifyPluginAsync = async (server) => {
@@ -159,20 +168,21 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
         return reply.status(400).send({ message: "Title is required" });
       }
 
-      let projectId: string | null = null;
-      if (request.body.projectId !== undefined) {
-        const trimmedProjectId = request.body.projectId?.trim();
-        if (trimmedProjectId) {
-          const project = findProjectForUser(username, trimmedProjectId);
-          if (!project) {
-            return reply.status(400).send({ message: "Project not found" });
-          }
-          projectId = trimmedProjectId;
-        }
+      const trimmedProjectId = request.body.projectId?.trim();
+      if (!trimmedProjectId) {
+        return reply.status(400).send({ message: "Project is required" });
       }
+      const project = findProjectForUser(username, trimmedProjectId);
+      if (!project) {
+        return reply.status(400).send({ message: "Project not found" });
+      }
+      const projectId = trimmedProjectId;
 
       if (request.body.tags !== undefined && !Array.isArray(request.body.tags)) {
         return reply.status(400).send({ message: "Tags must be an array of strings" });
+      }
+      if (request.body.comments !== undefined && !Array.isArray(request.body.comments)) {
+        return reply.status(400).send({ message: "Comments must be an array of strings" });
       }
 
       const now = new Date().toISOString();
@@ -181,6 +191,7 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
         title: trimmedTitle,
         description: "",
         tags: request.body.tags ? normalizeTags(request.body.tags) : [],
+        comments: request.body.comments ? normalizeComments(request.body.comments) : [],
         status: DEFAULT_TASK_STATUS,
         projectId,
         assignee: normalizeOptionalText(request.body.assignee),
@@ -240,14 +251,13 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
       if (request.body.projectId !== undefined) {
         const trimmedProjectId = request.body.projectId?.trim() ?? "";
         if (!trimmedProjectId) {
-          updates.projectId = null;
-        } else {
-          const project = findProjectForUser(username, trimmedProjectId);
-          if (!project) {
-            return reply.status(400).send({ message: "Project not found" });
-          }
-          updates.projectId = trimmedProjectId;
+          return reply.status(400).send({ message: "Project is required" });
         }
+        const project = findProjectForUser(username, trimmedProjectId);
+        if (!project) {
+          return reply.status(400).send({ message: "Project not found" });
+        }
+        updates.projectId = trimmedProjectId;
       }
 
       if (request.body.assignee !== undefined) {
@@ -267,6 +277,13 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
           return reply.status(400).send({ message: "Tags must be an array of strings" });
         }
         updates.tags = normalizeTags(request.body.tags);
+      }
+
+      if (request.body.comments !== undefined) {
+        if (!Array.isArray(request.body.comments)) {
+          return reply.status(400).send({ message: "Comments must be an array of strings" });
+        }
+        updates.comments = normalizeComments(request.body.comments);
       }
 
       const updated = updateTask(taskRow.id, updates);

@@ -62,6 +62,8 @@ const TaskPage = (props: TaskPageProps) => {
   const [dueDate, setDueDate] = createSignal("");
   const [tags, setTags] = createSignal<string[]>([]);
   const [tagInput, setTagInput] = createSignal("");
+  const [comments, setComments] = createSignal<string[]>([]);
+  const [commentInput, setCommentInput] = createSignal("");
   const [companyMembers, setCompanyMembers] = createSignal<CompanyMember[]>([]);
   const [membersLoading, setMembersLoading] = createSignal(false);
   const [membersError, setMembersError] = createSignal<string | null>(null);
@@ -164,6 +166,7 @@ const TaskPage = (props: TaskPageProps) => {
       setPriority(found.priority ?? "");
       setDueDate(toDateInputValue(found.dueDate ?? null));
       setTags(found.tags ?? []);
+      setComments(found.comments ?? []);
     } catch (fetchError) {
       const message = (fetchError as Error).message || "Unable to load task.";
       setError(message);
@@ -234,6 +237,7 @@ const TaskPage = (props: TaskPageProps) => {
       priority: string | null;
       dueDate: string | null;
       tags: string[];
+      comments: string[];
     }>,
     successMessage?: string
   ) => {
@@ -264,6 +268,7 @@ const TaskPage = (props: TaskPageProps) => {
       setPriority(updated.priority ?? "");
       setDueDate(toDateInputValue(updated.dueDate ?? null));
       setTags(updated.tags ?? []);
+      setComments(updated.comments ?? []);
       if (successMessage) {
         notify(successMessage, "success");
       }
@@ -302,7 +307,8 @@ const TaskPage = (props: TaskPageProps) => {
           assignee: assignee().trim() || null,
           priority: priority().trim() || null,
           dueDate: dueDate().trim() || null,
-          tags: tags()
+          tags: tags(),
+          comments: comments()
         },
         "Task saved"
       );
@@ -348,6 +354,22 @@ const TaskPage = (props: TaskPageProps) => {
     if (!current) return;
     const nextTags = tags().filter((tag) => tag.toLowerCase() !== tagToRemove.toLowerCase());
     void updateTask(current.id, { tags: nextTags }, "Tags updated");
+  };
+
+  const handleAddComment = () => {
+    const current = task();
+    if (!current) return;
+    const text = commentInput().trim();
+    if (!text) return;
+    const nextComments = [...comments(), text];
+    setCommentInput("");
+    void updateTask(current.id, { comments: nextComments }, "Comment added");
+  };
+
+  const handleCommentKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    void handleAddComment();
   };
 
   const handleBack = () => {
@@ -482,6 +504,33 @@ const TaskPage = (props: TaskPageProps) => {
                 class="ghost"
                 onClick={handleAddTag}
                 disabled={!tagInput().trim()}
+              >
+                Add
+              </button>
+            </div>
+          </label>
+          <label>
+            Comments
+            <Show when={comments().length > 0} fallback={<span class="helper-text">No comments yet.</span>}>
+              <div class="task-comments">
+                <For each={comments()}>
+                  {(comment) => <p class="task-comment">{comment}</p>}
+                </For>
+              </div>
+            </Show>
+            <div class="task-comments-input">
+              <input
+                class="text-input"
+                value={commentInput()}
+                onInput={(event) => setCommentInput(event.currentTarget.value)}
+                onKeyDown={handleCommentKeyDown}
+                placeholder="Add comment"
+              />
+              <button
+                type="button"
+                class="ghost"
+                onClick={handleAddComment}
+                disabled={!commentInput().trim()}
               >
                 Add
               </button>

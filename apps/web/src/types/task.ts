@@ -6,6 +6,7 @@ export type TaskRecord = {
   title: string;
   description: string;
   tags: string[];
+  comments: string[];
   projectId: string | null;
   status: TaskStatus;
   assignee: string | null;

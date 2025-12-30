@@ -6,6 +6,7 @@ export type TaskRecord = {
   title: string;
   description: string;
   tags: string[];
+  comments: string[];
   status: TaskStatus;
   projectId: string | null;
   assignee: string | null;
@@ -24,6 +25,7 @@ const mapRow = (row: TaskRow): TaskRecord => ({
   title: row.title,
   description: row.description,
   tags: row.tags ?? [],
+  comments: row.comments ?? [],
   status: row.status,
   projectId: row.projectId,
   assignee: row.assignee,
@@ -42,9 +44,14 @@ export const listTasks = (
   sortOrder?: TaskSortOrder
 ): TaskRecord[] => {
   const state = loadDatabase();
+  const accessibleProjectIds = new Set(
+    state.projects
+      .filter((project) => project.username === username || project.members.includes(username))
+      .map((project) => project.id)
+  );
   const normalizedSearch = search?.trim().toLowerCase();
   const filtered = state.tasks
-    .filter((task) => task.username === username)
+    .filter((task) => task.projectId !== null && accessibleProjectIds.has(task.projectId))
     .filter((task) => {
       if (!status || status.length === 0) {
         return true;
@@ -166,6 +173,7 @@ type TaskUpdatePayload = {
   title?: string;
   description?: string;
   tags?: string[];
+  comments?: string[];
   status?: TaskStatus;
   projectId?: string | null;
   assignee?: string | null;
@@ -191,6 +199,10 @@ export const updateTask = (taskId: string, payload: TaskUpdatePayload): TaskReco
 
   if (payload.tags !== undefined) {
     target.tags = payload.tags;
+  }
+
+  if (payload.comments !== undefined) {
+    target.comments = payload.comments;
   }
 
   if (payload.status !== undefined) {

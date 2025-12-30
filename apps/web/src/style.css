@@ -1219,6 +1219,35 @@ label {
   min-width: 200px;
 }
 
+.task-comments {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+.task-comment {
+  margin: 0;
+  padding: 0.5rem 0.7rem;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.35);
+  border: 1px solid var(--surface-border);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.task-comments-input {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.task-comments-input .text-input {
+  flex: 1;
+  min-width: 200px;
+}
+
 .ghost {
   border: 1px solid var(--surface-border);
   background: transparent;

@@ -37,6 +37,7 @@ export type TaskRow = {
   title: string;
   description: string;
   tags: string[];
+  comments: string[];
   status: TaskStatus;
   projectId: string | null;
   assignee: string | null;
@@ -79,13 +80,14 @@ type RawProjectRow = Omit<ProjectRow, "members" | "visibility"> & {
   visibility?: "private" | "corporate";
 };
 
-type RawTaskRow = Omit<TaskRow, "createdBy" | "assignee" | "priority" | "dueDate" | "tags"> & {
+type RawTaskRow = Omit<TaskRow, "createdBy" | "assignee" | "priority" | "dueDate" | "tags" | "comments"> & {
   createdBy?: string;
   status?: TaskStatus;
   assignee?: string | null;
   priority?: string | null;
   dueDate?: string | null;
   tags?: string[];
+  comments?: string[];
 };
 
 type RawNoteRow = Omit<NoteRow, "projectId"> & {
@@ -126,6 +128,7 @@ const normalizeState = (payload: RawDatabaseState): DatabaseState => ({
   tasks: (payload.tasks ?? []).map((task) => ({
     ...task,
     tags: task.tags ?? [],
+    comments: task.comments ?? [],
     status: task.status ?? DEFAULT_TASK_STATUS,
     assignee: task.assignee ?? null,
     priority: task.priority ?? null,
@@ -152,6 +155,7 @@ export const loadDatabase = (): DatabaseState => {
     (parsed.tasks ?? []).some(
       (task) =>
         task.tags === undefined ||
+        task.comments === undefined ||
         task.status === undefined ||
         task.assignee === undefined ||
         task.priority === undefined ||
