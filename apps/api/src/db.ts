@@ -1,7 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { DEFAULT_TASK_STATUS, type TaskStatus } from "./taskStatus";
+import {
+  DEFAULT_TASK_STATUS,
+  buildTaskStatusList,
+  type TaskStatus
+} from "./taskStatus";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.join(__dirname, "..", "data");
@@ -29,6 +33,7 @@ export type ProjectRow = {
   updatedAt: string;
   members: string[];
   visibility: "private" | "corporate";
+  taskStatuses: string[];
 };
 
 export type TaskRow = {
@@ -75,9 +80,10 @@ type RawUserRow = {
   company?: string | null;
 };
 
-type RawProjectRow = Omit<ProjectRow, "members" | "visibility"> & {
+type RawProjectRow = Omit<ProjectRow, "members" | "visibility" | "taskStatuses"> & {
   members?: string[];
   visibility?: "private" | "corporate";
+  taskStatuses?: string[];
 };
 
 type RawTaskRow = Omit<TaskRow, "createdBy" | "assignee" | "priority" | "dueDate" | "tags" | "comments"> & {
@@ -123,7 +129,8 @@ const normalizeState = (payload: RawDatabaseState): DatabaseState => ({
   projects: (payload.projects ?? []).map((project) => ({
     ...project,
     members: project.members ?? [],
-    visibility: project.visibility === "corporate" ? "corporate" : "private"
+    visibility: project.visibility === "corporate" ? "corporate" : "private",
+    taskStatuses: buildTaskStatusList(project.taskStatuses)
   })),
   tasks: (payload.tasks ?? []).map((task) => ({
     ...task,
@@ -151,7 +158,9 @@ export const loadDatabase = (): DatabaseState => {
     (parsed.users ?? []).some(
       (user) => user.role === undefined || user.company === undefined
     ) ||
-    (parsed.projects ?? []).some((project) => project.visibility === undefined) ||
+    (parsed.projects ?? []).some(
+      (project) => project.visibility === undefined || project.taskStatuses === undefined
+    ) ||
     (parsed.tasks ?? []).some(
       (task) =>
         task.tags === undefined ||

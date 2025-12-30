@@ -13,8 +13,8 @@ import {
 } from "./tasksStore";
 import {
   DEFAULT_TASK_STATUS,
-  TASK_STATUSES,
-  isTaskStatus,
+  DEFAULT_TASK_STATUSES,
+  findStatusMatch,
   type TaskStatus
 } from "./taskStatus";
 
@@ -97,9 +97,8 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
     if (!value) {
       return null;
     }
-    const normalized = value.trim().toLowerCase();
-    const match = TASK_STATUSES.find((status) => status.toLowerCase() === normalized);
-    return match ?? null;
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
   };
 
   const parseSortField = (value: string | undefined): TaskSortFieldValue | null => {
@@ -136,14 +135,14 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
     if (!username) return;
 
     const normalizedSearch = request.query.search?.trim();
-    const requestedStatuses = (() => {
-      const { status } = request.query;
-      const values = Array.isArray(status) ? status : status ? [status] : [];
-      const parsed = values
-        .map((value) => parseStatus(value))
-        .filter((entry): entry is TaskStatus => !!entry);
-      return parsed.length ? parsed : undefined;
-    })();
+      const requestedStatuses = (() => {
+        const { status } = request.query;
+        const values = Array.isArray(status) ? status : status ? [status] : [];
+        const parsed = values
+          .map((value) => parseStatus(value))
+          .filter((entry): entry is TaskStatus => !!entry);
+        return parsed.length ? parsed : undefined;
+      })();
     const sortField = parseSortField(request.query.sort_by);
     const sortOrder = sortField ? parseSortOrder(request.query.order) ?? "asc" : undefined;
     const tasks = listTasks(
@@ -192,7 +191,7 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
         description: "",
         tags: request.body.tags ? normalizeTags(request.body.tags) : [],
         comments: request.body.comments ? normalizeComments(request.body.comments) : [],
-        status: DEFAULT_TASK_STATUS,
+        status: project.taskStatuses[0] ?? DEFAULT_TASK_STATUS,
         projectId,
         assignee: normalizeOptionalText(request.body.assignee),
         priority: normalizeOptionalText(request.body.priority),
@@ -241,11 +240,17 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
         updates.description = request.body.description.trim();
       }
 
+      const currentProject = taskRow.projectId
+        ? findProjectForUser(username, taskRow.projectId)
+        : null;
+      const allowedStatuses = currentProject?.taskStatuses ?? DEFAULT_TASK_STATUSES;
+
       if (request.body.status !== undefined) {
-        if (!isTaskStatus(request.body.status)) {
+        const matched = findStatusMatch(request.body.status, allowedStatuses);
+        if (!matched) {
           return reply.status(400).send({ message: "Invalid task status" });
         }
-        updates.status = request.body.status;
+        updates.status = matched;
       }
 
       if (request.body.projectId !== undefined) {
@@ -258,6 +263,10 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
           return reply.status(400).send({ message: "Project not found" });
         }
         updates.projectId = trimmedProjectId;
+        if (updates.status === undefined) {
+          const fallback = findStatusMatch(taskRow.status, project.taskStatuses);
+          updates.status = fallback ?? project.taskStatuses[0] ?? DEFAULT_TASK_STATUS;
+        }
       }
 
       if (request.body.assignee !== undefined) {

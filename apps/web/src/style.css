@@ -1273,9 +1273,13 @@ label {
   background: rgba(16, 185, 129, 0.15);
 }
 
-.tasks-table tbody tr.status-row--in-progress {
-  background: rgba(251, 191, 36, 0.12);
-}
+  .tasks-table tbody tr.status-row--in-progress {
+    background: rgba(251, 191, 36, 0.12);
+  }
+
+  .tasks-table tbody tr.status-row--backlog {
+    background: rgba(148, 163, 184, 0.12);
+  }
 
 .status-pill {
   display: inline-flex;
@@ -1293,15 +1297,25 @@ label {
   color: #1d4ed8;
 }
 
-.status-pill--in-progress {
-  background: rgba(251, 191, 36, 0.25);
-  color: #92400e;
-}
+  .status-pill--in-progress {
+    background: rgba(251, 191, 36, 0.25);
+    color: #92400e;
+  }
 
-.status-pill--done {
-  background: rgba(16, 185, 129, 0.35);
-  color: #047857;
-}
+  .status-pill--done {
+    background: rgba(16, 185, 129, 0.35);
+    color: #047857;
+  }
+
+  .status-pill--backlog {
+    background: rgba(148, 163, 184, 0.35);
+    color: #475569;
+  }
+
+  .status-pill--custom {
+    background: rgba(148, 163, 184, 0.18);
+    color: #475569;
+  }
 
 .status-cell {
   display: flex;
@@ -1327,13 +1341,57 @@ label {
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
 }
 
-.status-field {
-  display: flex;
-  flex-direction: column;
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  gap: 0.25rem;
-}
+  .status-field {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    gap: 0.25rem;
+  }
+
+  .status-manager {
+    margin: 1.25rem 0;
+    padding: 1rem;
+    border-radius: 16px;
+    background: var(--surface-panel);
+    border: 1px solid var(--surface-border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .status-manager__header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .status-manager__form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .status-manager__form .text-input {
+    flex: 1;
+    min-width: 220px;
+  }
+
+  .status-manager__list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+
+  .status-manager__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.25);
+  }
 
 .notification-stack {
   position: fixed;

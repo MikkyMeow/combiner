@@ -1,5 +1,10 @@
-export const TASK_STATUS_OPTIONS = ["To do", "In progress", "Done"] as const;
-export type TaskStatus = (typeof TASK_STATUS_OPTIONS)[number];
+export const TASK_STATUS_OPTIONS = [
+  "Backlog",
+  "To do",
+  "In progress",
+  "Done"
+] as const;
+export type TaskStatus = string;
 
 export type TaskRecord = {
   id: string;
@@ -17,13 +22,15 @@ export type TaskRecord = {
   createdBy: string;
 };
 
-const statusSuffixMap: Record<TaskStatus, string> = {
-  "To do": "todo",
-  "In progress": "in-progress",
-  Done: "done"
+const statusSuffixMap: Record<string, string> = {
+  backlog: "backlog",
+  "to do": "todo",
+  "in progress": "in-progress",
+  done: "done"
 };
 
-export const getStatusSuffix = (status: TaskStatus) => statusSuffixMap[status];
+export const getStatusSuffix = (status: TaskStatus) =>
+  statusSuffixMap[status.toLowerCase()] ?? "custom";
 
 export const getStatusRowClass = (status: TaskStatus) => `status-row--${getStatusSuffix(status)}`;
 

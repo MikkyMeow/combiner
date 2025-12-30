@@ -1,5 +1,5 @@
 import { loadDatabase, saveDatabase, type TaskRow } from "./db";
-import { TASK_STATUSES, type TaskStatus } from "./taskStatus";
+import { DEFAULT_TASK_STATUSES, type TaskStatus } from "./taskStatus";
 
 export type TaskRecord = {
   id: string;
@@ -50,13 +50,14 @@ export const listTasks = (
       .map((project) => project.id)
   );
   const normalizedSearch = search?.trim().toLowerCase();
+  const normalizedStatusFilter = status?.map((entry) => entry.toLowerCase());
   const filtered = state.tasks
     .filter((task) => task.projectId !== null && accessibleProjectIds.has(task.projectId))
     .filter((task) => {
-      if (!status || status.length === 0) {
+      if (!normalizedStatusFilter || normalizedStatusFilter.length === 0) {
         return true;
       }
-      return status.includes(task.status);
+      return normalizedStatusFilter.includes(task.status.toLowerCase());
     })
     .filter((task) => {
       if (!normalizedSearch) {
@@ -77,11 +78,14 @@ export const listTasks = (
     const bValue =
       sortField === "status" ? b.status : b.title.toLowerCase();
     if (sortField === "status") {
-      const aIndex = TASK_STATUSES.indexOf(a.status);
-      const bIndex = TASK_STATUSES.indexOf(b.status);
-      if (aIndex !== bIndex) {
+      const statusOrder = DEFAULT_TASK_STATUSES;
+      const aIndex = statusOrder.findIndex((status) => status === a.status);
+      const bIndex = statusOrder.findIndex((status) => status === b.status);
+      const resolvedA = aIndex === -1 ? statusOrder.length : aIndex;
+      const resolvedB = bIndex === -1 ? statusOrder.length : bIndex;
+      if (resolvedA !== resolvedB) {
         const direction = sortOrder === "desc" ? -1 : 1;
-        return (aIndex - bIndex) * direction;
+        return (resolvedA - resolvedB) * direction;
       }
     }
     const comparison = aValue.localeCompare(bValue);
@@ -98,18 +102,20 @@ export const findTasksForProject = (
   status?: TaskStatus[],
   tags?: string[],
   sortField?: TaskSortField | null,
-  sortOrder?: TaskSortOrder
+  sortOrder?: TaskSortOrder,
+  statusOrder?: string[]
 ): TaskRecord[] => {
   const state = loadDatabase();
   const normalizedSearch = search?.trim().toLowerCase();
   const normalizedTags = tags?.map((tag) => tag.trim().toLowerCase()).filter(Boolean);
+  const normalizedStatusFilter = status?.map((entry) => entry.toLowerCase());
   const filtered = state.tasks
     .filter((task) => task.projectId === projectId)
     .filter((task) => {
-      if (!status || status.length === 0) {
+      if (!normalizedStatusFilter || normalizedStatusFilter.length === 0) {
         return true;
       }
-      return status.includes(task.status);
+      return normalizedStatusFilter.includes(task.status.toLowerCase());
     })
     .filter((task) => {
       if (!normalizedTags || normalizedTags.length === 0) {
@@ -139,11 +145,14 @@ export const findTasksForProject = (
     const bValue =
       sortField === "status" ? b.status : b.title.toLowerCase();
     if (sortField === "status") {
-      const aIndex = TASK_STATUSES.indexOf(a.status);
-      const bIndex = TASK_STATUSES.indexOf(b.status);
-      if (aIndex !== bIndex) {
+      const order = statusOrder?.length ? statusOrder : DEFAULT_TASK_STATUSES;
+      const aIndex = order.findIndex((status) => status === a.status);
+      const bIndex = order.findIndex((status) => status === b.status);
+      const resolvedA = aIndex === -1 ? order.length : aIndex;
+      const resolvedB = bIndex === -1 ? order.length : bIndex;
+      if (resolvedA !== resolvedB) {
         const direction = sortOrder === "desc" ? -1 : 1;
-        return (aIndex - bIndex) * direction;
+        return (resolvedA - resolvedB) * direction;
       }
     }
     const comparison = aValue.localeCompare(bValue);

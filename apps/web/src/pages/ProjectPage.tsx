@@ -36,6 +36,41 @@ type ProjectPageProps = {
   onUnauthorized?: () => void;
 };
 
+const decodeBase64Url = (value: string): string | null => {
+  if (typeof window === "undefined" || typeof window.atob !== "function") {
+    return null;
+  }
+  let base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+  while (base64.length % 4 !== 0) {
+    base64 += "=";
+  }
+  try {
+    return window.atob(base64);
+  } catch {
+    return null;
+  }
+};
+
+const getUsernameFromToken = (token: string | null): string | null => {
+  if (!token) {
+    return null;
+  }
+  const parts = token.split(".");
+  if (parts.length < 2) {
+    return null;
+  }
+  const payload = decodeBase64Url(parts[1]);
+  if (!payload) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(payload) as { username?: string };
+    return typeof parsed.username === "string" ? parsed.username : null;
+  } catch {
+    return null;
+  }
+};
+
 const ProjectPage = (props: ProjectPageProps) => {
   const [project, setProject] = createSignal<Project | null>(null);
   const [tasks, setTasks] = createSignal<TaskRecord[]>([]);
@@ -60,6 +95,9 @@ const ProjectPage = (props: ProjectPageProps) => {
   const [taskStatusFilter, setTaskStatusFilter] = createSignal<TaskStatus | "">("");
   const [taskSortField, setTaskSortField] = createSignal<TaskSortField | null>(null);
   const [taskSortOrder, setTaskSortOrder] = createSignal<TaskSortOrder>("asc");
+  const [newStatusName, setNewStatusName] = createSignal("");
+  const [savingStatus, setSavingStatus] = createSignal(false);
+  const currentUsername = () => getUsernameFromToken(props.jwtToken);
 
   onMount(() => {
     if (typeof window === "undefined") return;
@@ -123,8 +161,16 @@ const ProjectPage = (props: ProjectPageProps) => {
   const getTasksByStatus = (status: TaskStatus) =>
     tasks().filter((task) => task.status === status);
 
+  const projectStatuses = () => project()?.taskStatuses ?? TASK_STATUS_OPTIONS;
+
   const visibleStatuses = () =>
-    taskStatusFilter() ? [taskStatusFilter() as TaskStatus] : TASK_STATUS_OPTIONS;
+    taskStatusFilter() ? [taskStatusFilter() as TaskStatus] : projectStatuses();
+
+  const canManageStatuses = () => {
+    const owner = project()?.owner;
+    const username = currentUsername();
+    return !!owner && !!username && owner === username;
+  };
 
   const matchesTaskFilters = (task: TaskRecord) => {
     const trimmedSearch = taskSearchTerm().trim().toLowerCase();
@@ -556,6 +602,101 @@ const ProjectPage = (props: ProjectPageProps) => {
     }
   };
 
+  const refreshProject = () => {
+    const projectId = project()?.id ?? props.projectId?.trim();
+    if (!projectId) return;
+    void fetchProject(projectId, {
+      taskSearch: taskSearchTerm(),
+      taskTags: parseTags(taskTagSearch()),
+      taskStatus: taskStatusFilter(),
+      taskSortField: taskSortField(),
+      taskSortOrder: taskSortOrder(),
+      preserveData: true,
+      showLoading: false
+    });
+  };
+
+  createEffect(() => {
+    const filter = taskStatusFilter();
+    if (filter && !projectStatuses().includes(filter)) {
+      setTaskStatusFilter("");
+      refreshProject();
+    }
+  });
+
+  const handleAddStatus = async (event: SubmitEvent) => {
+    event.preventDefault();
+    if (!props.jwtToken) {
+      handleUnauthorized();
+      return;
+    }
+    const projectId = project()?.id ?? props.projectId?.trim();
+    if (!projectId) {
+      notify("Project identifier is missing.", "warning");
+      return;
+    }
+    const name = newStatusName().trim();
+    if (!name) {
+      notify("Status name cannot be empty.", "warning");
+      return;
+    }
+    setSavingStatus(true);
+    try {
+      const response = await fetch(`${apiUrl()}/projects/${encodeURIComponent(projectId)}/statuses`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({ status: name })
+      });
+      if (!response.ok) {
+        await handleFetchError(response);
+        return;
+      }
+      const payload = (await response.json()) as { project: Project };
+      setProject(payload.project);
+      setNewStatusName("");
+      notify("Status added", "success");
+    } catch (fetchError) {
+      const message = (fetchError as Error).message || "Unable to add status.";
+      setError(message);
+      notify(message, "error");
+    } finally {
+      setSavingStatus(false);
+    }
+  };
+
+  const handleRemoveStatus = async (status: string) => {
+    if (!props.jwtToken) {
+      handleUnauthorized();
+      return;
+    }
+    const projectId = project()?.id ?? props.projectId?.trim();
+    if (!projectId) {
+      notify("Project identifier is missing.", "warning");
+      return;
+    }
+    setSavingStatus(true);
+    try {
+      const response = await fetch(`${apiUrl()}/projects/${encodeURIComponent(projectId)}/statuses`, {
+        method: "DELETE",
+        headers: getHeaders(),
+        body: JSON.stringify({ status })
+      });
+      if (!response.ok) {
+        await handleFetchError(response);
+        return;
+      }
+      const payload = (await response.json()) as { project: Project };
+      setProject(payload.project);
+      notify("Status removed", "success");
+      refreshProject();
+    } catch (fetchError) {
+      const message = (fetchError as Error).message || "Unable to remove status.";
+      setError(message);
+      notify(message, "error");
+    } finally {
+      setSavingStatus(false);
+    }
+  };
 
   const handleDelete = async (id: string) => {
     if (!props.jwtToken) {
@@ -819,7 +960,7 @@ const ProjectPage = (props: ProjectPageProps) => {
                 <span>Status</span>
                 <select value={taskStatusFilter()} onInput={handleTaskStatusFilterChange}>
                   <option value="">All statuses</option>
-                  <For each={TASK_STATUS_OPTIONS}>
+                  <For each={projectStatuses()}>
                     {(status) => <option value={status}>{status}</option>}
                   </For>
                 </select>
@@ -864,6 +1005,48 @@ const ProjectPage = (props: ProjectPageProps) => {
           <p class="helper-text">
             {tasks().length} task{tasks().length === 1 ? "" : "s"} attached to this project.
           </p>
+
+          <Show when={project() && canManageStatuses()}>
+            <section class="status-manager">
+              <div class="status-manager__header">
+                <h3>Statuses</h3>
+                <p class="helper-text">Default statuses cannot be removed.</p>
+              </div>
+              <form class="status-manager__form" onSubmit={handleAddStatus}>
+                <input
+                  class="text-input"
+                  value={newStatusName()}
+                  onInput={(event) => setNewStatusName(event.currentTarget.value)}
+                  placeholder="New status name"
+                  aria-label="New status name"
+                />
+                <button class="primary" type="submit" disabled={savingStatus()}>
+                  {savingStatus() ? "Saving..." : "Add status"}
+                </button>
+              </form>
+              <div class="status-manager__list">
+                <For each={projectStatuses()}>
+                  {(status) => (
+                    <div class="status-manager__item">
+                      <span class={`status-pill ${getStatusPillClass(status)}`}>
+                        {status}
+                      </span>
+                      <Show when={!TASK_STATUS_OPTIONS.includes(status as (typeof TASK_STATUS_OPTIONS)[number])}>
+                        <button
+                          type="button"
+                          class="ghost"
+                          onClick={() => handleRemoveStatus(status)}
+                          disabled={savingStatus()}
+                        >
+                          Remove
+                        </button>
+                      </Show>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </section>
+          </Show>
 
           <Show when={tasks().length === 0}>
             <p class="helper-text">No tasks are linked to this project yet.</p>
@@ -936,7 +1119,7 @@ const ProjectPage = (props: ProjectPageProps) => {
                                           )
                                         }
                                       >
-                                        <For each={TASK_STATUS_OPTIONS}>
+                                        <For each={projectStatuses()}>
                                           {(option) => <option value={option}>{option}</option>}
                                         </For>
                                       </select>

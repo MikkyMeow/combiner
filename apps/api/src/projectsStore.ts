@@ -1,4 +1,5 @@
 import { loadDatabase, saveDatabase, type ProjectRow } from "./db";
+import { DEFAULT_TASK_STATUS, buildTaskStatusList } from "./taskStatus";
 
 export type ProjectRecord = {
   id: string;
@@ -9,6 +10,7 @@ export type ProjectRecord = {
   owner: string;
   members: string[];
   visibility: "private" | "corporate";
+  taskStatuses: string[];
 };
 
 export type ProjectSortField = "title" | "visibility";
@@ -22,7 +24,8 @@ const mapRow = (row: ProjectRow): ProjectRecord => ({
   updatedAt: row.updatedAt,
   owner: row.username,
   members: [...row.members],
-  visibility: row.visibility
+  visibility: row.visibility,
+  taskStatuses: [...row.taskStatuses]
 });
 
 const userHasAccessToRow = (username: string, row: ProjectRow): boolean =>
@@ -139,6 +142,58 @@ export const addProjectMember = (projectId: string, member: string): ProjectReco
     target.members.push(member);
   }
   target.updatedAt = new Date().toISOString();
+  saveDatabase(state);
+  return mapRow(target);
+};
+
+export const addProjectTaskStatus = (
+  projectId: string,
+  status: string
+): ProjectRecord | null => {
+  const state = loadDatabase();
+  const target = state.projects.find((entry) => entry.id === projectId);
+  if (!target) {
+    return null;
+  }
+  target.taskStatuses = buildTaskStatusList([
+    ...(target.taskStatuses ?? []),
+    status
+  ]);
+  target.updatedAt = new Date().toISOString();
+  saveDatabase(state);
+  return mapRow(target);
+};
+
+export const removeProjectTaskStatus = (
+  projectId: string,
+  status: string
+): ProjectRecord | null => {
+  const state = loadDatabase();
+  const target = state.projects.find((entry) => entry.id === projectId);
+  if (!target) {
+    return null;
+  }
+  const normalized = status.trim().toLowerCase();
+  const nextStatuses = (target.taskStatuses ?? []).filter(
+    (entry) => entry.toLowerCase() !== normalized
+  );
+  target.taskStatuses = buildTaskStatusList(nextStatuses);
+  target.updatedAt = new Date().toISOString();
+
+  state.tasks = state.tasks.map((task) => {
+    if (task.projectId !== projectId) {
+      return task;
+    }
+    if (task.status.toLowerCase() !== normalized) {
+      return task;
+    }
+    return {
+      ...task,
+      status: target.taskStatuses[0] ?? DEFAULT_TASK_STATUS,
+      updatedAt: new Date().toISOString()
+    };
+  });
+
   saveDatabase(state);
   return mapRow(target);
 };

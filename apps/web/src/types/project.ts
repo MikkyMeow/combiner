@@ -9,4 +9,5 @@ export type Project = {
   owner: string;
   members: string[];
   visibility: ProjectVisibility;
+  taskStatuses: string[];
 };

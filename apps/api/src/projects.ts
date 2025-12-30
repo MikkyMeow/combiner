@@ -2,11 +2,13 @@ import { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { randomUUID } from "crypto";
 import {
   addProjectMember,
+  addProjectTaskStatus,
   deleteProject,
   findProjectById,
   findProjectForUser,
   insertProject,
   listProjects,
+  removeProjectTaskStatus,
   type ProjectRecord,
   type ProjectSortField,
   type ProjectSortOrder,
@@ -17,7 +19,11 @@ import {
   type TaskSortField,
   type TaskSortOrder
 } from "./tasksStore";
-import { TASK_STATUSES, type TaskStatus } from "./taskStatus";
+import {
+  DEFAULT_TASK_STATUSES,
+  findStatusMatch,
+  type TaskStatus
+} from "./taskStatus";
 import { findNotesForProject } from "./notesStore";
 import { findUserByUsername, type UserRole } from "./usersStore";
 
@@ -94,14 +100,10 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
     return null;
   };
 
-  const parseTaskStatus = (value: string | undefined): TaskStatus | null => {
-    if (!value) {
-      return null;
-    }
-    const normalized = value.trim().toLowerCase();
-    const match = TASK_STATUSES.find((status) => status.toLowerCase() === normalized);
-    return match ?? null;
-  };
+  const parseTaskStatus = (
+    value: string | undefined,
+    statuses: readonly string[]
+  ): TaskStatus | null => findStatusMatch(value, statuses);
 
   const parseTaskSortField = (value: string | undefined): TaskSortFieldValue | null => {
     if (!value) {
@@ -203,7 +205,7 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
             ? [task_status]
             : [];
         const parsed = values
-          .map((value) => parseTaskStatus(value))
+          .map((value) => parseTaskStatus(value, project.taskStatuses))
           .filter((entry): entry is TaskStatus => !!entry);
         return parsed.length ? parsed : undefined;
       })();
@@ -216,7 +218,8 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
         requestedStatuses,
         requestedTags,
         sortField,
-        sortOrder
+        sortOrder,
+        project.taskStatuses
       );
       const notes = findNotesForProject(project.id);
       return { project, tasks, notes };
@@ -249,7 +252,8 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
         updatedAt: now,
         owner: authUser.username,
         members: [],
-        visibility: authUser.role === "user" ? "private" : requestedVisibility
+        visibility: authUser.role === "user" ? "private" : requestedVisibility,
+        taskStatuses: [...DEFAULT_TASK_STATUSES]
       };
 
       return insertProject(authUser.username, newProject);
@@ -325,6 +329,88 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
       }
 
       const updated = addProjectMember(project.id, invitee);
+      if (!updated) {
+        return reply.status(404).send({ message: "Project not found" });
+      }
+
+      return { project: updated };
+    }
+  );
+
+  server.post<{ Params: { id: string }; Body: { status: string } }>(
+    "/projects/:id/statuses",
+    { preValidation: [ensureAuthenticated] },
+    async (request, reply) => {
+      const authUser = requireUser(request, reply);
+      if (!authUser) return;
+
+      const project = findProjectById(request.params.id);
+      if (!project) {
+        return reply.status(404).send({ message: "Project not found" });
+      }
+
+      if (project.owner !== authUser.username) {
+        return reply.status(403).send({ message: "Only the project owner can manage statuses" });
+      }
+
+      const trimmedStatus = request.body.status?.trim();
+      if (!trimmedStatus) {
+        return reply.status(400).send({ message: "Status name is required" });
+      }
+
+      const exists = project.taskStatuses.some(
+        (entry) => entry.toLowerCase() === trimmedStatus.toLowerCase()
+      );
+      if (exists) {
+        return reply.status(400).send({ message: "Status already exists" });
+      }
+
+      const updated = addProjectTaskStatus(project.id, trimmedStatus);
+      if (!updated) {
+        return reply.status(404).send({ message: "Project not found" });
+      }
+
+      return { project: updated };
+    }
+  );
+
+  server.delete<{ Params: { id: string }; Body: { status: string } }>(
+    "/projects/:id/statuses",
+    { preValidation: [ensureAuthenticated] },
+    async (request, reply) => {
+      const authUser = requireUser(request, reply);
+      if (!authUser) return;
+
+      const project = findProjectById(request.params.id);
+      if (!project) {
+        return reply.status(404).send({ message: "Project not found" });
+      }
+
+      if (project.owner !== authUser.username) {
+        return reply.status(403).send({ message: "Only the project owner can manage statuses" });
+      }
+
+      const trimmedStatus = request.body.status?.trim();
+      if (!trimmedStatus) {
+        return reply.status(400).send({ message: "Status name is required" });
+      }
+
+      const normalized = trimmedStatus.toLowerCase();
+      const isDefault = DEFAULT_TASK_STATUSES.some(
+        (entry) => entry.toLowerCase() === normalized
+      );
+      if (isDefault) {
+        return reply.status(400).send({ message: "Default statuses cannot be removed" });
+      }
+
+      const exists = project.taskStatuses.some(
+        (entry) => entry.toLowerCase() === normalized
+      );
+      if (!exists) {
+        return reply.status(404).send({ message: "Status not found" });
+      }
+
+      const updated = removeProjectTaskStatus(project.id, trimmedStatus);
       if (!updated) {
         return reply.status(404).send({ message: "Project not found" });
       }

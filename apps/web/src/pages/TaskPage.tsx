@@ -57,6 +57,7 @@ const TaskPage = (props: TaskPageProps) => {
   const [title, setTitle] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [status, setStatus] = createSignal<TaskStatus>(TASK_STATUS_OPTIONS[0]);
+  const [statusOptions, setStatusOptions] = createSignal<string[]>(TASK_STATUS_OPTIONS);
   const [assignee, setAssignee] = createSignal("");
   const [priority, setPriority] = createSignal("");
   const [dueDate, setDueDate] = createSignal("");
@@ -162,6 +163,11 @@ const TaskPage = (props: TaskPageProps) => {
       setTitle(found.title);
       setDescription(found.description ?? "");
       setStatus(found.status);
+      if (found.projectId) {
+        void loadProjectStatuses(found.projectId, found.status);
+      } else {
+        setStatusOptions(TASK_STATUS_OPTIONS);
+      }
       setAssignee(found.assignee ?? "");
       setPriority(found.priority ?? "");
       setDueDate(toDateInputValue(found.dueDate ?? null));
@@ -326,6 +332,36 @@ const TaskPage = (props: TaskPageProps) => {
     void updateTask(current.id, { status: nextStatus }, "Task status updated");
   };
 
+  const loadProjectStatuses = async (projectId: string, currentStatus: string) => {
+    if (!props.jwtToken) {
+      setStatusOptions(TASK_STATUS_OPTIONS);
+      return;
+    }
+    try {
+      const response = await fetch(`${apiUrl()}/projects/${encodeURIComponent(projectId)}`, {
+        headers: getHeaders()
+      });
+      if (!response.ok) {
+        await handleFetchError(response);
+        return;
+      }
+      const payload = (await response.json()) as { project: { taskStatuses?: string[] } };
+      const list = payload.project?.taskStatuses ?? [];
+      if (list.length > 0) {
+        setStatusOptions(
+          list.includes(currentStatus) ? list : [...list, currentStatus]
+        );
+      } else {
+        setStatusOptions(TASK_STATUS_OPTIONS);
+      }
+    } catch (fetchError) {
+      const message = (fetchError as Error).message || "Unable to load project statuses.";
+      setError(message);
+      notify(message, "error");
+      setStatusOptions(TASK_STATUS_OPTIONS);
+    }
+  };
+
   const handleAddTag = async () => {
     const current = task();
     if (!current) return;
@@ -438,7 +474,7 @@ const TaskPage = (props: TaskPageProps) => {
               value={status()}
               onInput={(event) => handleStatusChange(event.currentTarget.value as TaskStatus)}
             >
-              <For each={TASK_STATUS_OPTIONS}>
+              <For each={statusOptions()}>
                 {(option) => <option value={option}>{option}</option>}
               </For>
             </select>
