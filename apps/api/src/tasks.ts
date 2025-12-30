@@ -6,11 +6,14 @@ import {
   findTaskRowById,
   insertTask,
   listTasks,
+  type TaskSortField,
+  type TaskSortOrder,
   type TaskRecord,
   updateTask
 } from "./tasksStore";
 import {
   DEFAULT_TASK_STATUS,
+  TASK_STATUSES,
   isTaskStatus,
   type TaskStatus
 } from "./taskStatus";
@@ -32,6 +35,9 @@ type TaskUpdateBody = {
   priority?: string | null;
   dueDate?: string | null;
 };
+
+type TaskSortFieldValue = TaskSortField;
+type TaskSortOrderValue = TaskSortOrder;
 
 const normalizeOptionalText = (value?: string | null) => {
   const trimmed = value?.trim();
@@ -55,11 +61,66 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
     return username;
   };
 
-  server.get("/tasks", { preValidation: [ensureAuthenticated] }, async (request, reply) => {
+  const parseStatus = (value: string | undefined): TaskStatus | null => {
+    if (!value) {
+      return null;
+    }
+    const normalized = value.trim().toLowerCase();
+    const match = TASK_STATUSES.find((status) => status.toLowerCase() === normalized);
+    return match ?? null;
+  };
+
+  const parseSortField = (value: string | undefined): TaskSortFieldValue | null => {
+    if (!value) {
+      return null;
+    }
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "title" || normalized === "status") {
+      return normalized as TaskSortFieldValue;
+    }
+    return null;
+  };
+
+  const parseSortOrder = (value: string | undefined): TaskSortOrderValue | null => {
+    if (!value) {
+      return null;
+    }
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "asc" || normalized === "desc") {
+      return normalized as TaskSortOrderValue;
+    }
+    return null;
+  };
+
+  server.get<{
+    Querystring: {
+      search?: string;
+      status?: string | string[];
+      sort_by?: string;
+      order?: string;
+    };
+  }>("/tasks", { preValidation: [ensureAuthenticated] }, async (request, reply) => {
     const username = requireUser(request, reply);
     if (!username) return;
 
-    const tasks = listTasks(username);
+    const normalizedSearch = request.query.search?.trim();
+    const requestedStatuses = (() => {
+      const { status } = request.query;
+      const values = Array.isArray(status) ? status : status ? [status] : [];
+      const parsed = values
+        .map((value) => parseStatus(value))
+        .filter((entry): entry is TaskStatus => !!entry);
+      return parsed.length ? parsed : undefined;
+    })();
+    const sortField = parseSortField(request.query.sort_by);
+    const sortOrder = sortField ? parseSortOrder(request.query.order) ?? "asc" : undefined;
+    const tasks = listTasks(
+      username,
+      normalizedSearch?.length ? normalizedSearch : undefined,
+      requestedStatuses,
+      sortField,
+      sortOrder
+    );
     return { tasks };
   });
 

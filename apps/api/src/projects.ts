@@ -12,13 +12,20 @@ import {
   type ProjectSortOrder,
   updateProject
 } from "./projectsStore";
-import { findTasksForProject } from "./tasksStore";
+import {
+  findTasksForProject,
+  type TaskSortField,
+  type TaskSortOrder
+} from "./tasksStore";
+import { TASK_STATUSES, type TaskStatus } from "./taskStatus";
 import { findNotesForProject } from "./notesStore";
 import { findUserByUsername, type UserRole } from "./usersStore";
 
 type ProjectVisibility = ProjectRecord["visibility"];
 type ProjectSortFieldValue = ProjectSortField;
 type ProjectSortOrderValue = ProjectSortOrder;
+type TaskSortFieldValue = TaskSortField;
+type TaskSortOrderValue = TaskSortOrder;
 
 type ProjectCreateBody = {
   title: string;
@@ -87,6 +94,37 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
     return null;
   };
 
+  const parseTaskStatus = (value: string | undefined): TaskStatus | null => {
+    if (!value) {
+      return null;
+    }
+    const normalized = value.trim().toLowerCase();
+    const match = TASK_STATUSES.find((status) => status.toLowerCase() === normalized);
+    return match ?? null;
+  };
+
+  const parseTaskSortField = (value: string | undefined): TaskSortFieldValue | null => {
+    if (!value) {
+      return null;
+    }
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "title" || normalized === "status") {
+      return normalized as TaskSortFieldValue;
+    }
+    return null;
+  };
+
+  const parseTaskSortOrder = (value: string | undefined): TaskSortOrderValue | null => {
+    if (!value) {
+      return null;
+    }
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "asc" || normalized === "desc") {
+      return normalized as TaskSortOrderValue;
+    }
+    return null;
+  };
+
   server.get<{
     Querystring: {
       search?: string;
@@ -123,7 +161,15 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
     }
   );
 
-  server.get<{ Params: { id: string } }>(
+  server.get<{
+    Params: { id: string };
+    Querystring: {
+      task_search?: string;
+      task_status?: string | string[];
+      task_sort_by?: string;
+      task_order?: string;
+    };
+  }>(
     "/projects/:id",
     { preValidation: [ensureAuthenticated] },
     async (request, reply) => {
@@ -135,7 +181,28 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
         return reply.status(404).send({ message: "Project not found" });
       }
 
-      const tasks = findTasksForProject(project.id);
+      const normalizedSearch = request.query.task_search?.trim();
+      const requestedStatuses = (() => {
+        const { task_status } = request.query;
+        const values = Array.isArray(task_status)
+          ? task_status
+          : task_status
+            ? [task_status]
+            : [];
+        const parsed = values
+          .map((value) => parseTaskStatus(value))
+          .filter((entry): entry is TaskStatus => !!entry);
+        return parsed.length ? parsed : undefined;
+      })();
+      const sortField = parseTaskSortField(request.query.task_sort_by);
+      const sortOrder = sortField ? parseTaskSortOrder(request.query.task_order) ?? "asc" : undefined;
+      const tasks = findTasksForProject(
+        project.id,
+        normalizedSearch?.length ? normalizedSearch : undefined,
+        requestedStatuses,
+        sortField,
+        sortOrder
+      );
       const notes = findNotesForProject(project.id);
       return { project, tasks, notes };
     }

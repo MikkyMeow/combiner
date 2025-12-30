@@ -1,4 +1,4 @@
-import { createEffect, createSignal, For, Show, onMount } from "solid-js";
+import { createEffect, createSignal, For, Show, onMount, untrack } from "solid-js";
 import type { NotificationType } from "../components/notifications/useNotifications";
 import type { Project } from "../types/project";
 import {
@@ -10,6 +10,8 @@ import type { TaskRecord, TaskStatus } from "../types/task";
 
 const apiUrl = () => import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 type TaskViewMode = "list" | "kanban";
+type TaskSortField = "title" | "status";
+type TaskSortOrder = "asc" | "desc";
 const TASK_VIEW_STORAGE_KEY = "projectTasksViewMode";
 const TASK_VIEW_OPTIONS: { value: TaskViewMode; label: string }[] = [
   { value: "list", label: "List" },
@@ -53,6 +55,10 @@ const ProjectPage = (props: ProjectPageProps) => {
   const [draggingTaskId, setDraggingTaskId] = createSignal<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = createSignal<TaskStatus | null>(null);
   const [recentlyMovedTaskId, setRecentlyMovedTaskId] = createSignal<string | null>(null);
+  const [taskSearchTerm, setTaskSearchTerm] = createSignal("");
+  const [taskStatusFilter, setTaskStatusFilter] = createSignal<TaskStatus | "">("");
+  const [taskSortField, setTaskSortField] = createSignal<TaskSortField | null>(null);
+  const [taskSortOrder, setTaskSortOrder] = createSignal<TaskSortOrder>("asc");
 
   onMount(() => {
     if (typeof window === "undefined") return;
@@ -116,22 +122,67 @@ const ProjectPage = (props: ProjectPageProps) => {
   const getTasksByStatus = (status: TaskStatus) =>
     tasks().filter((task) => task.status === status);
 
-  const fetchProject = async (projectId: string) => {
+  const visibleStatuses = () =>
+    taskStatusFilter() ? [taskStatusFilter() as TaskStatus] : TASK_STATUS_OPTIONS;
+
+  const matchesTaskFilters = (task: TaskRecord) => {
+    const trimmedSearch = taskSearchTerm().trim().toLowerCase();
+    if (trimmedSearch) {
+      const title = task.title.toLowerCase();
+      const description = task.description.toLowerCase();
+      if (!title.includes(trimmedSearch) && !description.includes(trimmedSearch)) {
+        return false;
+      }
+    }
+    const status = taskStatusFilter();
+    if (status && task.status !== status) {
+      return false;
+    }
+    return true;
+  };
+
+  const fetchProject = async (
+    projectId: string,
+    options?: {
+      taskSearch?: string;
+      taskStatus?: TaskStatus | "";
+      taskSortField?: TaskSortField | null;
+      taskSortOrder?: TaskSortOrder;
+      preserveData?: boolean;
+      showLoading?: boolean;
+    }
+  ) => {
     if (!props.jwtToken) {
       handleUnauthorized();
       return;
     }
 
-    setLoading(true);
+    const showLoading = options?.showLoading ?? true;
+    if (showLoading) {
+      setLoading(true);
+    }
     setError(null);
-    setProject(null);
-    setTasks([]);
-    setNotes([]);
+    if (!options?.preserveData) {
+      setProject(null);
+      setTasks([]);
+      setNotes([]);
+    }
 
     try {
-      const response = await fetch(`${apiUrl()}/projects/${encodeURIComponent(projectId)}`, {
-        headers: getHeaders()
-      });
+      const url = new URL(`${apiUrl()}/projects/${encodeURIComponent(projectId)}`);
+      const trimmedSearch = options?.taskSearch?.trim();
+      if (trimmedSearch) {
+        url.searchParams.set("task_search", trimmedSearch);
+      }
+      if (options?.taskStatus) {
+        url.searchParams.set("task_status", options.taskStatus);
+      }
+      if (options?.taskSortField) {
+        url.searchParams.set("task_sort_by", options.taskSortField);
+        url.searchParams.set("task_order", options?.taskSortOrder ?? "asc");
+      }
+
+      const response = await fetch(url.toString(), { headers: getHeaders() });
 
       if (!response.ok) {
         await handleFetchError(response);
@@ -147,8 +198,82 @@ const ProjectPage = (props: ProjectPageProps) => {
       setError(message);
       notify(message, "error");
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
+  };
+
+  let taskSearchDebounce: ReturnType<typeof setTimeout> | undefined;
+
+  const scheduleTaskFetch = (
+    searchValue: string,
+    statusValue: TaskStatus | "",
+    field: TaskSortField | null,
+    order: TaskSortOrder
+  ) => {
+    if (taskSearchDebounce) {
+      clearTimeout(taskSearchDebounce);
+    }
+    taskSearchDebounce = setTimeout(() => {
+      const projectId = props.projectId?.trim();
+      if (!projectId) return;
+      void fetchProject(projectId, {
+        taskSearch: searchValue,
+        taskStatus: statusValue,
+        taskSortField: field,
+        taskSortOrder: order,
+        preserveData: true,
+        showLoading: false
+      });
+      taskSearchDebounce = undefined;
+    }, 300);
+  };
+
+  const handleTaskSearchInput = (event: InputEvent) => {
+    const value = event.currentTarget.value;
+    setTaskSearchTerm(value);
+    scheduleTaskFetch(value, taskStatusFilter(), taskSortField(), taskSortOrder());
+  };
+
+  const handleClearTaskSearch = () => {
+    if (!taskSearchTerm()) {
+      return;
+    }
+    if (taskSearchDebounce) {
+      clearTimeout(taskSearchDebounce);
+      taskSearchDebounce = undefined;
+    }
+    setTaskSearchTerm("");
+    const projectId = props.projectId?.trim();
+    if (!projectId) return;
+    void fetchProject(projectId, {
+      taskSearch: "",
+      taskStatus: taskStatusFilter(),
+      taskSortField: taskSortField(),
+      taskSortOrder: taskSortOrder(),
+      preserveData: true,
+      showLoading: false
+    });
+  };
+
+  const handleTaskStatusFilterChange = (event: InputEvent) => {
+    const value = event.currentTarget.value as TaskStatus | "";
+    setTaskStatusFilter(value);
+    scheduleTaskFetch(taskSearchTerm(), value, taskSortField(), taskSortOrder());
+  };
+
+  const handleTaskSortFieldChange = (event: InputEvent) => {
+    const value = event.currentTarget.value;
+    const field = value ? (value as TaskSortField) : null;
+    setTaskSortField(field);
+    scheduleTaskFetch(taskSearchTerm(), taskStatusFilter(), field, taskSortOrder());
+  };
+
+  const handleTaskSortOrderChange = (event: InputEvent) => {
+    const value = event.currentTarget.value as TaskSortOrder;
+    setTaskSortOrder(value);
+    scheduleTaskFetch(taskSearchTerm(), taskStatusFilter(), taskSortField(), value);
   };
 
   createEffect(() => {
@@ -163,7 +288,13 @@ const ProjectPage = (props: ProjectPageProps) => {
       return;
     }
 
-    void fetchProject(projectId);
+    const options = untrack(() => ({
+      taskSearch: taskSearchTerm(),
+      taskStatus: taskStatusFilter(),
+      taskSortField: taskSortField(),
+      taskSortOrder: taskSortOrder()
+    }));
+    void fetchProject(projectId, options);
   });
 
   const handleBack = () => {
@@ -193,7 +324,16 @@ const ProjectPage = (props: ProjectPageProps) => {
       }
 
       const updated = (await response.json()) as TaskRecord;
-      setTasks((current) => current.map((task) => (task.id === updated.id ? updated : task)));
+      setTasks((current) => {
+        const exists = current.some((task) => task.id === updated.id);
+        if (!matchesTaskFilters(updated)) {
+          return current.filter((task) => task.id !== updated.id);
+        }
+        if (!exists) {
+          return [updated, ...current];
+        }
+        return current.map((task) => (task.id === updated.id ? updated : task));
+      });
 
       if (successMessage) {
         notify(successMessage, "success");
@@ -249,7 +389,9 @@ const ProjectPage = (props: ProjectPageProps) => {
       }
 
       const created = (await response.json()) as TaskRecord;
-      setTasks((current) => [created, ...current]);
+      if (matchesTaskFilters(created)) {
+        setTasks((current) => [created, ...current]);
+      }
       setNewTitle("");
       notify("Task created", "success");
     } catch (fetchError) {
@@ -473,8 +615,13 @@ const ProjectPage = (props: ProjectPageProps) => {
     const draggedTask = previousTasks.find((task) => task.id === draggedId);
     if (!draggedTask || draggedTask.status === status) return;
 
-    setTasks((current) =>
-      current.map((task) => (task.id === draggedId ? { ...task, status } : task))
+    const nextTasks = tasks().map((task) =>
+      task.id === draggedId ? { ...task, status } : task
+    );
+    setTasks(() =>
+      matchesTaskFilters({ ...draggedTask, status })
+        ? nextTasks
+        : nextTasks.filter((task) => task.id !== draggedId)
     );
     setRecentlyMovedTaskId(draggedId);
     window.setTimeout(() => {
@@ -591,6 +738,50 @@ const ProjectPage = (props: ProjectPageProps) => {
             </button>
           </form>
 
+          <form class="projects-search" onSubmit={(event) => event.preventDefault()}>
+            <div class="projects-search__controls">
+              <input
+                type="search"
+                class="text-input"
+                value={taskSearchTerm()}
+                onInput={handleTaskSearchInput}
+                placeholder="Search by title or description"
+                aria-label="Search tasks"
+              />
+              <Show when={taskSearchTerm()}>
+                <button type="button" class="ghost" onClick={handleClearTaskSearch}>
+                  Clear
+                </button>
+              </Show>
+            </div>
+            <div class="projects-search__filters" role="group" aria-label="Task filters">
+              <label class="projects-search__filter projects-search__filter--select">
+                <span>Status</span>
+                <select value={taskStatusFilter()} onInput={handleTaskStatusFilterChange}>
+                  <option value="">All statuses</option>
+                  <For each={TASK_STATUS_OPTIONS}>
+                    {(status) => <option value={status}>{status}</option>}
+                  </For>
+                </select>
+              </label>
+              <label class="projects-search__filter projects-search__filter--select">
+                <span>Sort by</span>
+                <select value={taskSortField() ?? ""} onInput={handleTaskSortFieldChange}>
+                  <option value="">Default (created at)</option>
+                  <option value="title">Name</option>
+                  <option value="status">Status</option>
+                </select>
+              </label>
+              <label class="projects-search__filter projects-search__filter--select">
+                <span>Order</span>
+                <select value={taskSortOrder()} onInput={handleTaskSortOrderChange} disabled={!taskSortField()}>
+                  <option value="asc">Ascending</option>
+                  <option value="desc">Descending</option>
+                </select>
+              </label>
+            </div>
+          </form>
+
           <div class="task-view-controls">
             <span class="helper-text">Display</span>
             <div class="task-view-toggle">
@@ -631,7 +822,7 @@ const ProjectPage = (props: ProjectPageProps) => {
                     </tr>
                   </thead>
                   <tbody>
-                    <For each={TASK_STATUS_OPTIONS}>
+                    <For each={visibleStatuses()}>
                       {(status) => {
                         const statusTasks = () => getTasksByStatus(status);
                         return (
@@ -720,7 +911,7 @@ const ProjectPage = (props: ProjectPageProps) => {
             </Show>
             <Show when={taskView() === "kanban"}>
               <div class="kanban-board">
-                <For each={TASK_STATUS_OPTIONS}>
+                <For each={visibleStatuses()}>
                   {(status) => {
                     const columnTasks = () => getTasksByStatus(status);
                     return (

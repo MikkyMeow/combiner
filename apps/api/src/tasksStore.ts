@@ -1,5 +1,5 @@
 import { loadDatabase, saveDatabase, type TaskRow } from "./db";
-import type { TaskStatus } from "./taskStatus";
+import { TASK_STATUSES, type TaskStatus } from "./taskStatus";
 
 export type TaskRecord = {
   id: string;
@@ -15,6 +15,9 @@ export type TaskRecord = {
   updatedAt: string;
 };
 
+export type TaskSortField = "title" | "status";
+export type TaskSortOrder = "asc" | "desc";
+
 const mapRow = (row: TaskRow): TaskRecord => ({
   id: row.id,
   title: row.title,
@@ -29,20 +32,106 @@ const mapRow = (row: TaskRow): TaskRecord => ({
   updatedAt: row.updatedAt
 });
 
-export const listTasks = (username: string): TaskRecord[] => {
+export const listTasks = (
+  username: string,
+  search?: string,
+  status?: TaskStatus[],
+  sortField?: TaskSortField | null,
+  sortOrder?: TaskSortOrder
+): TaskRecord[] => {
   const state = loadDatabase();
-  return state.tasks
+  const normalizedSearch = search?.trim().toLowerCase();
+  const filtered = state.tasks
     .filter((task) => task.username === username)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .map(mapRow);
+    .filter((task) => {
+      if (!status || status.length === 0) {
+        return true;
+      }
+      return status.includes(task.status);
+    })
+    .filter((task) => {
+      if (!normalizedSearch) {
+        return true;
+      }
+      const title = task.title.toLowerCase();
+      const description = task.description.toLowerCase();
+      return title.includes(normalizedSearch) || description.includes(normalizedSearch);
+    });
+
+  const entries = filtered.slice();
+  const sorted = entries.sort((a, b) => {
+    if (!sortField) {
+      return b.createdAt.localeCompare(a.createdAt);
+    }
+    const aValue =
+      sortField === "status" ? a.status : a.title.toLowerCase();
+    const bValue =
+      sortField === "status" ? b.status : b.title.toLowerCase();
+    if (sortField === "status") {
+      const aIndex = TASK_STATUSES.indexOf(a.status);
+      const bIndex = TASK_STATUSES.indexOf(b.status);
+      if (aIndex !== bIndex) {
+        const direction = sortOrder === "desc" ? -1 : 1;
+        return (aIndex - bIndex) * direction;
+      }
+    }
+    const comparison = aValue.localeCompare(bValue);
+    const direction = sortOrder === "desc" ? -1 : 1;
+    return comparison * direction;
+  });
+
+  return sorted.map(mapRow);
 };
 
-export const findTasksForProject = (projectId: string): TaskRecord[] => {
+export const findTasksForProject = (
+  projectId: string,
+  search?: string,
+  status?: TaskStatus[],
+  sortField?: TaskSortField | null,
+  sortOrder?: TaskSortOrder
+): TaskRecord[] => {
   const state = loadDatabase();
-  return state.tasks
+  const normalizedSearch = search?.trim().toLowerCase();
+  const filtered = state.tasks
     .filter((task) => task.projectId === projectId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .map(mapRow);
+    .filter((task) => {
+      if (!status || status.length === 0) {
+        return true;
+      }
+      return status.includes(task.status);
+    })
+    .filter((task) => {
+      if (!normalizedSearch) {
+        return true;
+      }
+      const title = task.title.toLowerCase();
+      const description = task.description.toLowerCase();
+      return title.includes(normalizedSearch) || description.includes(normalizedSearch);
+    });
+
+  const entries = filtered.slice();
+  const sorted = entries.sort((a, b) => {
+    if (!sortField) {
+      return b.createdAt.localeCompare(a.createdAt);
+    }
+    const aValue =
+      sortField === "status" ? a.status : a.title.toLowerCase();
+    const bValue =
+      sortField === "status" ? b.status : b.title.toLowerCase();
+    if (sortField === "status") {
+      const aIndex = TASK_STATUSES.indexOf(a.status);
+      const bIndex = TASK_STATUSES.indexOf(b.status);
+      if (aIndex !== bIndex) {
+        const direction = sortOrder === "desc" ? -1 : 1;
+        return (aIndex - bIndex) * direction;
+      }
+    }
+    const comparison = aValue.localeCompare(bValue);
+    const direction = sortOrder === "desc" ? -1 : 1;
+    return comparison * direction;
+  });
+
+  return sorted.map(mapRow);
 };
 
 export const findTaskRowById = (taskId: string): TaskRow | null => {
