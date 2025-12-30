@@ -14,8 +14,10 @@ import {
   type ProjectSortOrder,
   updateProject
 } from "./projectsStore";
+import { appendAuditLog, buildChanges, listAuditForProject } from "./auditStore";
 import {
   findTasksForProject,
+  findTaskRowById,
   type TaskSortField,
   type TaskSortOrder
 } from "./tasksStore";
@@ -32,6 +34,71 @@ type ProjectSortFieldValue = ProjectSortField;
 type ProjectSortOrderValue = ProjectSortOrder;
 type TaskSortFieldValue = TaskSortField;
 type TaskSortOrderValue = TaskSortOrder;
+
+const PROJECT_AUDIT_FIELDS = [
+  "title",
+  "description",
+  "visibility",
+  "members",
+  "taskStatuses",
+  "createdAt",
+  "updatedAt",
+  "owner"
+] as const;
+
+const TASK_AUDIT_FIELDS = [
+  "title",
+  "description",
+  "tags",
+  "comments",
+  "status",
+  "projectId",
+  "assignee",
+  "priority",
+  "dueDate",
+  "createdAt",
+  "updatedAt",
+  "createdBy"
+] as const;
+
+const buildProjectSnapshot = (project: ProjectRecord): Record<string, unknown> => ({
+  title: project.title,
+  description: project.description,
+  visibility: project.visibility,
+  members: project.members,
+  taskStatuses: project.taskStatuses,
+  createdAt: project.createdAt,
+  updatedAt: project.updatedAt,
+  owner: project.owner
+});
+
+const buildTaskSnapshot = (task: {
+  title: string;
+  description: string;
+  tags: string[];
+  comments: string[];
+  status: TaskStatus;
+  projectId: string | null;
+  assignee: string | null;
+  priority: string | null;
+  dueDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+}): Record<string, unknown> => ({
+  title: task.title,
+  description: task.description,
+  tags: task.tags,
+  comments: task.comments,
+  status: task.status,
+  projectId: task.projectId,
+  assignee: task.assignee,
+  priority: task.priority,
+  dueDate: task.dueDate,
+  createdAt: task.createdAt,
+  updatedAt: task.updatedAt,
+  createdBy: task.createdBy
+});
 
 type ProjectCreateBody = {
   title: string;
@@ -175,6 +242,23 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
     }
   );
 
+  server.get<{ Params: { id: string } }>(
+    "/projects/:id/history",
+    { preValidation: [ensureAuthenticated] },
+    async (request, reply) => {
+      const authUser = requireUser(request, reply);
+      if (!authUser) return;
+
+      const project = findProjectForUser(authUser.username, request.params.id);
+      if (!project) {
+        return reply.status(404).send({ message: "Project not found" });
+      }
+
+      const history = listAuditForProject(project.id);
+      return { history };
+    }
+  );
+
   server.get<{
     Params: { id: string };
     Querystring: {
@@ -256,7 +340,19 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
         taskStatuses: [...DEFAULT_TASK_STATUSES]
       };
 
-      return insertProject(authUser.username, newProject);
+      const created = insertProject(authUser.username, newProject);
+      const changes = buildChanges(null, buildProjectSnapshot(created), PROJECT_AUDIT_FIELDS);
+      appendAuditLog({
+        at: now,
+        actor: authUser.username,
+        entity: "project",
+        entityId: created.id,
+        projectId: created.id,
+        action: "create",
+        changes
+      });
+
+      return created;
     }
   );
 
@@ -293,6 +389,21 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
       if (!updated) {
         return reply.status(404).send({ message: "Project not found" });
       }
+
+      const changes = buildChanges(
+        buildProjectSnapshot(target),
+        buildProjectSnapshot(updated),
+        PROJECT_AUDIT_FIELDS
+      );
+      appendAuditLog({
+        at: now,
+        actor: authUser.username,
+        entity: "project",
+        entityId: updated.id,
+        projectId: updated.id,
+        action: "update",
+        changes
+      });
 
       return updated;
     }
@@ -333,6 +444,21 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
         return reply.status(404).send({ message: "Project not found" });
       }
 
+      const changes = buildChanges(
+        buildProjectSnapshot(project),
+        buildProjectSnapshot(updated),
+        PROJECT_AUDIT_FIELDS
+      );
+      appendAuditLog({
+        at: new Date().toISOString(),
+        actor: authUser.username,
+        entity: "project",
+        entityId: updated.id,
+        projectId: updated.id,
+        action: "member_add",
+        changes
+      });
+
       return { project: updated };
     }
   );
@@ -369,6 +495,21 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
       if (!updated) {
         return reply.status(404).send({ message: "Project not found" });
       }
+
+      const changes = buildChanges(
+        buildProjectSnapshot(project),
+        buildProjectSnapshot(updated),
+        PROJECT_AUDIT_FIELDS
+      );
+      appendAuditLog({
+        at: new Date().toISOString(),
+        actor: authUser.username,
+        entity: "project",
+        entityId: updated.id,
+        projectId: updated.id,
+        action: "status_add",
+        changes
+      });
 
       return { project: updated };
     }
@@ -410,10 +551,64 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
         return reply.status(404).send({ message: "Status not found" });
       }
 
+      const tasksBefore = findTasksForProject(
+        project.id,
+        undefined,
+        [trimmedStatus],
+        undefined,
+        null,
+        undefined,
+        project.taskStatuses
+      );
       const updated = removeProjectTaskStatus(project.id, trimmedStatus);
       if (!updated) {
         return reply.status(404).send({ message: "Project not found" });
       }
+
+      const changes = buildChanges(
+        buildProjectSnapshot(project),
+        buildProjectSnapshot(updated),
+        PROJECT_AUDIT_FIELDS
+      );
+      const now = new Date().toISOString();
+      appendAuditLog({
+        at: now,
+        actor: authUser.username,
+        entity: "project",
+        entityId: updated.id,
+        projectId: updated.id,
+        action: "status_remove",
+        changes
+      });
+
+      tasksBefore.forEach((task) => {
+        const updatedRow = findTaskRowById(task.id);
+        if (!updatedRow) {
+          return;
+        }
+        const beforeSnapshot = buildTaskSnapshot(task);
+        const afterSnapshot = buildTaskSnapshot({
+          ...updatedRow,
+          createdBy: updatedRow.createdBy ?? updatedRow.username
+        });
+        const taskChanges = buildChanges(
+          beforeSnapshot,
+          afterSnapshot,
+          TASK_AUDIT_FIELDS
+        );
+        if (Object.keys(taskChanges).length === 0) {
+          return;
+        }
+        appendAuditLog({
+          at: now,
+          actor: authUser.username,
+          entity: "task",
+          entityId: updatedRow.id,
+          projectId: updatedRow.projectId,
+          action: "update",
+          changes: taskChanges
+        });
+      });
 
       return { project: updated };
     }
@@ -430,10 +625,64 @@ const projectsRoutes: FastifyPluginAsync = async (server) => {
       if (!project || project.owner !== authUser.username) {
         return reply.status(404).send({ message: "Project not found" });
       }
+      const tasksBefore = findTasksForProject(
+        project.id,
+        undefined,
+        undefined,
+        undefined,
+        null,
+        undefined,
+        project.taskStatuses
+      );
       const deleted = deleteProject(request.params.id);
       if (!deleted) {
         return reply.status(404).send({ message: "Project not found" });
       }
+
+      const now = new Date().toISOString();
+      const changes = buildChanges(
+        buildProjectSnapshot(project),
+        null,
+        PROJECT_AUDIT_FIELDS
+      );
+      appendAuditLog({
+        at: now,
+        actor: authUser.username,
+        entity: "project",
+        entityId: project.id,
+        projectId: project.id,
+        action: "delete",
+        changes
+      });
+
+      tasksBefore.forEach((task) => {
+        const updatedRow = findTaskRowById(task.id);
+        if (!updatedRow) {
+          return;
+        }
+        const beforeSnapshot = buildTaskSnapshot(task);
+        const afterSnapshot = buildTaskSnapshot({
+          ...updatedRow,
+          createdBy: updatedRow.createdBy ?? updatedRow.username
+        });
+        const taskChanges = buildChanges(
+          beforeSnapshot,
+          afterSnapshot,
+          TASK_AUDIT_FIELDS
+        );
+        if (Object.keys(taskChanges).length === 0) {
+          return;
+        }
+        appendAuditLog({
+          at: now,
+          actor: authUser.username,
+          entity: "task",
+          entityId: updatedRow.id,
+          projectId: updatedRow.projectId,
+          action: "move",
+          changes: taskChanges
+        });
+      });
 
       return { message: "Project deleted" };
     }

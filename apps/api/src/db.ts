@@ -64,11 +64,35 @@ export type NoteRow = {
   projectId: string | null;
 };
 
+export type AuditChange = {
+  from: unknown;
+  to: unknown;
+};
+
+export type AuditLogEntry = {
+  id: string;
+  at: string;
+  actor: string;
+  entity: "task" | "project";
+  entityId: string;
+  projectId: string | null;
+  action:
+    | "create"
+    | "update"
+    | "delete"
+    | "move"
+    | "member_add"
+    | "status_add"
+    | "status_remove";
+  changes: Record<string, AuditChange>;
+};
+
 export type DatabaseState = {
   users: UserRow[];
   projects: ProjectRow[];
   tasks: TaskRow[];
   notes: NoteRow[];
+  auditLogs: AuditLogEntry[];
 };
 
 type RawUserRow = {
@@ -105,13 +129,15 @@ type RawDatabaseState = {
   projects?: RawProjectRow[];
   tasks?: RawTaskRow[];
   notes?: RawNoteRow[];
+  auditLogs?: AuditLogEntry[];
 };
 
 const initialState: DatabaseState = {
   users: [],
   projects: [],
   tasks: [],
-  notes: []
+  notes: [],
+  auditLogs: []
 };
 
 const ensureDatabase = () => {
@@ -145,7 +171,8 @@ const normalizeState = (payload: RawDatabaseState): DatabaseState => ({
   notes: (payload.notes ?? []).map((note) => ({
     ...note,
     projectId: note.projectId ?? null
-  }))
+  })),
+  auditLogs: payload.auditLogs ?? []
 });
 
 export const loadDatabase = (): DatabaseState => {
@@ -155,6 +182,7 @@ export const loadDatabase = (): DatabaseState => {
   const normalized = normalizeState(parsed);
   const needsSchemaUpdate =
     parsed.notes === undefined ||
+    parsed.auditLogs === undefined ||
     (parsed.users ?? []).some(
       (user) => user.role === undefined || user.company === undefined
     ) ||

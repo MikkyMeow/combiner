@@ -7,6 +7,7 @@ import {
   getStatusPillClass
 } from "../types/task";
 import type { TaskRecord, TaskStatus } from "../types/task";
+import type { AuditLogEntry, AuditChange } from "../types/audit";
 
 const apiUrl = () => import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 type TaskViewMode = "list" | "kanban";
@@ -17,6 +18,33 @@ const TASK_VIEW_OPTIONS: { value: TaskViewMode; label: string }[] = [
   { value: "list", label: "List" },
   { value: "kanban", label: "Kanban" }
 ];
+const AUDIT_FIELD_LABELS: Record<string, string> = {
+  title: "Title",
+  description: "Description",
+  tags: "Tags",
+  comments: "Comments",
+  status: "Status",
+  projectId: "Project",
+  assignee: "Assignee",
+  priority: "Priority",
+  dueDate: "Due date",
+  createdAt: "Created",
+  updatedAt: "Updated",
+  createdBy: "Created by",
+  visibility: "Visibility",
+  members: "Members",
+  taskStatuses: "Statuses",
+  owner: "Owner"
+};
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+  create: "Created",
+  update: "Updated",
+  delete: "Deleted",
+  move: "Moved",
+  member_add: "Member added",
+  status_add: "Status added",
+  status_remove: "Status removed"
+};
 
 type Note = {
   id: string;
@@ -86,7 +114,7 @@ const ProjectPage = (props: ProjectPageProps) => {
   const [savingNote, setSavingNote] = createSignal(false);
   const [memberUsername, setMemberUsername] = createSignal("");
   const [invitingMember, setInvitingMember] = createSignal(false);
-  const [activeTab, setActiveTab] = createSignal<"tasks" | "notes">("tasks");
+  const [activeTab, setActiveTab] = createSignal<"tasks" | "notes" | "history">("tasks");
   const [draggingTaskId, setDraggingTaskId] = createSignal<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = createSignal<TaskStatus | null>(null);
   const [recentlyMovedTaskId, setRecentlyMovedTaskId] = createSignal<string | null>(null);
@@ -97,6 +125,9 @@ const ProjectPage = (props: ProjectPageProps) => {
   const [taskSortOrder, setTaskSortOrder] = createSignal<TaskSortOrder>("asc");
   const [newStatusName, setNewStatusName] = createSignal("");
   const [savingStatus, setSavingStatus] = createSignal(false);
+  const [projectHistory, setProjectHistory] = createSignal<AuditLogEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = createSignal(false);
+  const [historyError, setHistoryError] = createSignal<string | null>(null);
   const currentUsername = () => getUsernameFromToken(props.jwtToken);
 
   onMount(() => {
@@ -150,6 +181,83 @@ const ProjectPage = (props: ProjectPageProps) => {
     }
     setError(message);
     notify(message, "error");
+  };
+
+  const handleHistoryError = async (response: Response) => {
+    if (response.status === 401) {
+      props.onUnauthorized?.();
+      return;
+    }
+    let message = `${response.status} ${response.statusText}`;
+    try {
+      const payload = (await response.json()) as { message?: string };
+      if (payload?.message) {
+        message = payload.message;
+      }
+    } catch {
+      /* ignore */
+    }
+    setHistoryError(message);
+  };
+
+  const formatAuditValue = (value: unknown) => {
+    if (value === null || value === undefined) {
+      return "none";
+    }
+    if (Array.isArray(value)) {
+      return value.length > 0 ? value.join(", ") : "none";
+    }
+    if (typeof value === "string") {
+      return value.trim().length > 0 ? value : "none";
+    }
+    if (typeof value === "number" || typeof value === "boolean") {
+      return String(value);
+    }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  };
+
+  const formatAuditField = (field: string) => AUDIT_FIELD_LABELS[field] ?? field;
+
+  const formatAuditAction = (action: string) =>
+    AUDIT_ACTION_LABELS[action] ?? action;
+
+  const formatAuditEntity = (entry: AuditLogEntry) =>
+    entry.entity === "task" ? "Task" : "Project";
+
+  const getAuditChanges = (changes: Record<string, AuditChange>) =>
+    Object.entries(changes ?? {});
+
+  const loadProjectHistory = async (projectId: string) => {
+    if (!props.jwtToken) {
+      setProjectHistory([]);
+      setHistoryError(null);
+      return;
+    }
+
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const response = await fetch(`${apiUrl()}/projects/${encodeURIComponent(projectId)}/history`, {
+        headers: getHeaders()
+      });
+
+      if (!response.ok) {
+        await handleHistoryError(response);
+        return;
+      }
+
+      const payload = (await response.json()) as { history?: AuditLogEntry[] };
+      setProjectHistory(payload.history ?? []);
+    } catch (fetchError) {
+      const message = (fetchError as Error).message || "Unable to load project history.";
+      setHistoryError(message);
+    } finally {
+      setHistoryLoading(false);
+    }
   };
 
   const parseTags = (input: string) =>
@@ -388,6 +496,19 @@ const ProjectPage = (props: ProjectPageProps) => {
       taskSortOrder: taskSortOrder()
     }));
     void fetchProject(projectId, options);
+  });
+
+  createEffect(() => {
+    const projectId = project()?.id ?? props.projectId?.trim();
+    if (!projectId) {
+      setProjectHistory([]);
+      setHistoryError(null);
+      return;
+    }
+    if (activeTab() !== "history") {
+      return;
+    }
+    void loadProjectHistory(projectId);
   });
 
   const handleBack = () => {
@@ -902,6 +1023,15 @@ const ProjectPage = (props: ProjectPageProps) => {
         >
           Notes
         </button>
+        <button
+          classList={{ "project-tab": true, "project-tab--active": activeTab() === "history" }}
+          type="button"
+          role="tab"
+          aria-selected={activeTab() === "history"}
+          onClick={() => setActiveTab("history")}
+        >
+          History
+        </button>
       </div>
 
       <Show when={loading()}>
@@ -1313,6 +1443,68 @@ const ProjectPage = (props: ProjectPageProps) => {
             </div>
           </Show>
         </article>
+      </Show>
+
+      <Show when={!loading() && project() && activeTab() === "history"}>
+        <section class="tasks-panel audit-panel">
+          <div class="audit-header">
+            <h2>Project history</h2>
+            <button
+              type="button"
+              class="ghost"
+              onClick={() => {
+                const projectId = project()?.id ?? props.projectId?.trim();
+                if (projectId) {
+                  void loadProjectHistory(projectId);
+                }
+              }}
+            >
+              Refresh
+            </button>
+          </div>
+          <Show when={historyLoading()}>
+            <p class="helper-text">Loading history...</p>
+          </Show>
+          <Show when={historyError()}>
+            <p class="helper-text">{historyError()}</p>
+          </Show>
+          <Show when={!historyLoading() && projectHistory().length === 0}>
+            <p class="helper-text">No history entries yet.</p>
+          </Show>
+          <Show when={projectHistory().length > 0}>
+            <div class="audit-list">
+              <For each={projectHistory()}>
+                {(entry) => (
+                  <article class="audit-item">
+                    <div class="audit-meta">
+                      <span class="status-pill">{formatAuditAction(entry.action)}</span>
+                      <span class="audit-entity" title={entry.entityId}>
+                        {formatAuditEntity(entry)} {entry.entityId.slice(0, 8)}
+                      </span>
+                      <span class="audit-meta__info">
+                        {entry.actor} on {new Date(entry.at).toLocaleString()}
+                      </span>
+                    </div>
+                    <Show when={getAuditChanges(entry.changes).length > 0}>
+                      <div class="audit-changes">
+                        <For each={getAuditChanges(entry.changes)}>
+                          {([field, change]) => (
+                            <div class="audit-change">
+                              <span class="audit-field">{formatAuditField(field)}</span>
+                              <span class="audit-value">{formatAuditValue(change.from)}</span>
+                              <span class="audit-arrow">-&gt;</span>
+                              <span class="audit-value">{formatAuditValue(change.to)}</span>
+                            </div>
+                          )}
+                        </For>
+                      </div>
+                    </Show>
+                  </article>
+                )}
+              </For>
+            </div>
+          </Show>
+        </section>
       </Show>
     </section>
   );

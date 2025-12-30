@@ -11,6 +11,7 @@ import {
   type TaskRecord,
   updateTask
 } from "./tasksStore";
+import { appendAuditLog, buildChanges, listAuditForTask } from "./auditStore";
 import {
   DEFAULT_TASK_STATUS,
   DEFAULT_TASK_STATUSES,
@@ -42,6 +43,49 @@ type TaskUpdateBody = {
 
 type TaskSortFieldValue = TaskSortField;
 type TaskSortOrderValue = TaskSortOrder;
+
+const TASK_AUDIT_FIELDS = [
+  "title",
+  "description",
+  "tags",
+  "comments",
+  "status",
+  "projectId",
+  "assignee",
+  "priority",
+  "dueDate",
+  "createdAt",
+  "updatedAt",
+  "createdBy"
+] as const;
+
+const buildTaskSnapshot = (task: {
+  title: string;
+  description: string;
+  tags: string[];
+  comments: string[];
+  status: TaskStatus;
+  projectId: string | null;
+  assignee: string | null;
+  priority: string | null;
+  dueDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+}): Record<string, unknown> => ({
+  title: task.title,
+  description: task.description,
+  tags: task.tags,
+  comments: task.comments,
+  status: task.status,
+  projectId: task.projectId,
+  assignee: task.assignee,
+  priority: task.priority,
+  dueDate: task.dueDate,
+  createdAt: task.createdAt,
+  updatedAt: task.updatedAt,
+  createdBy: task.createdBy
+});
 
 const normalizeOptionalText = (value?: string | null) => {
   const trimmed = value?.trim();
@@ -155,6 +199,37 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
     return { tasks };
   });
 
+  server.get<{ Params: { id: string } }>(
+    "/tasks/:id/history",
+    { preValidation: [ensureAuthenticated] },
+    async (request, reply) => {
+      const username = requireUser(request, reply);
+      if (!username) return;
+
+      const history = listAuditForTask(request.params.id);
+      if (history.length === 0) {
+        return reply.status(404).send({ message: "Task not found" });
+      }
+
+      const projectIds = Array.from(
+        new Set(
+          history
+            .map((entry) => entry.projectId)
+            .filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
+        )
+      );
+
+      const hasAccess =
+        history.some((entry) => entry.actor === username) ||
+        projectIds.some((projectId) => !!findProjectForUser(username, projectId));
+      if (!hasAccess) {
+        return reply.status(404).send({ message: "Task not found" });
+      }
+
+      return { history };
+    }
+  );
+
   server.post<{ Body: TaskCreateBody }>(
     "/tasks",
     { preValidation: [ensureAuthenticated] },
@@ -201,7 +276,19 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
         updatedAt: now
       };
 
-      return insertTask(username, newTask);
+      const created = insertTask(username, newTask);
+      const changes = buildChanges(null, buildTaskSnapshot(created), TASK_AUDIT_FIELDS);
+      appendAuditLog({
+        at: now,
+        actor: username,
+        entity: "task",
+        entityId: created.id,
+        projectId: created.projectId,
+        action: "create",
+        changes
+      });
+
+      return created;
     }
   );
 
@@ -300,6 +387,23 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
         return reply.status(404).send({ message: "Task not found" });
       }
 
+      const beforeSnapshot = buildTaskSnapshot({
+        ...taskRow,
+        createdBy: taskRow.createdBy ?? taskRow.username
+      });
+      const afterSnapshot = buildTaskSnapshot(updated);
+      const changes = buildChanges(beforeSnapshot, afterSnapshot, TASK_AUDIT_FIELDS);
+      const isMove = changes.projectId !== undefined;
+      appendAuditLog({
+        at: now,
+        actor: username,
+        entity: "task",
+        entityId: updated.id,
+        projectId: updated.projectId,
+        action: isMove ? "move" : "update",
+        changes
+      });
+
       return updated;
     }
   );
@@ -328,6 +432,24 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
       if (!deleted) {
         return reply.status(404).send({ message: "Task not found" });
       }
+
+      const changes = buildChanges(
+        buildTaskSnapshot({
+          ...taskRow,
+          createdBy: taskRow.createdBy ?? taskRow.username
+        }),
+        null,
+        TASK_AUDIT_FIELDS
+      );
+      appendAuditLog({
+        at: new Date().toISOString(),
+        actor: username,
+        entity: "task",
+        entityId: taskRow.id,
+        projectId: taskRow.projectId,
+        action: "delete",
+        changes
+      });
 
       return { message: "Task deleted" };
     }

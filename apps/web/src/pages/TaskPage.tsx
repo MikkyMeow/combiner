@@ -5,6 +5,7 @@ import {
   getStatusPillClass
 } from "../types/task";
 import type { TaskRecord, TaskStatus } from "../types/task";
+import type { AuditLogEntry, AuditChange } from "../types/audit";
 
 const apiUrl = () => import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
@@ -23,6 +24,29 @@ type CompanyMember = {
 };
 
 const PRIORITY_OPTIONS = ["low", "normal", "high", "critical"] as const;
+const TASK_AUDIT_FIELD_LABELS: Record<string, string> = {
+  title: "Title",
+  description: "Description",
+  tags: "Tags",
+  comments: "Comments",
+  status: "Status",
+  projectId: "Project",
+  assignee: "Assignee",
+  priority: "Priority",
+  dueDate: "Due date",
+  createdAt: "Created",
+  updatedAt: "Updated",
+  createdBy: "Created by"
+};
+const TASK_AUDIT_ACTION_LABELS: Record<string, string> = {
+  create: "Created",
+  update: "Updated",
+  delete: "Deleted",
+  move: "Moved",
+  member_add: "Member added",
+  status_add: "Status added",
+  status_remove: "Status removed"
+};
 
 const toDateInputValue = (value: string | null) => {
   if (!value) {
@@ -71,6 +95,9 @@ const TaskPage = (props: TaskPageProps) => {
   const [loading, setLoading] = createSignal(true);
   const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
+  const [history, setHistory] = createSignal<AuditLogEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = createSignal(false);
+  const [historyError, setHistoryError] = createSignal<string | null>(null);
 
   const notify = (message: string, type: NotificationType = "info") => {
     props.onNotify?.(message, type);
@@ -110,6 +137,80 @@ const TaskPage = (props: TaskPageProps) => {
     }
     setError(message);
     notify(message, "error");
+  };
+
+  const handleHistoryError = async (response: Response) => {
+    if (response.status === 401) {
+      props.onUnauthorized?.();
+      return;
+    }
+    let message = `${response.status} ${response.statusText}`;
+    try {
+      const payload = (await response.json()) as { message?: string };
+      if (payload?.message) {
+        message = payload.message;
+      }
+    } catch {
+      /* ignore */
+    }
+    setHistoryError(message);
+  };
+
+  const formatAuditValue = (value: unknown) => {
+    if (value === null || value === undefined) {
+      return "none";
+    }
+    if (Array.isArray(value)) {
+      return value.length > 0 ? value.join(", ") : "none";
+    }
+    if (typeof value === "string") {
+      return value.trim().length > 0 ? value : "none";
+    }
+    if (typeof value === "number" || typeof value === "boolean") {
+      return String(value);
+    }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  };
+
+  const formatAuditField = (field: string) => TASK_AUDIT_FIELD_LABELS[field] ?? field;
+
+  const formatAuditAction = (action: string) =>
+    TASK_AUDIT_ACTION_LABELS[action] ?? action;
+
+  const getAuditChanges = (changes: Record<string, AuditChange>) =>
+    Object.entries(changes ?? {});
+
+  const loadTaskHistory = async (id: string) => {
+    if (!props.jwtToken) {
+      setHistory([]);
+      setHistoryError(null);
+      return;
+    }
+
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const response = await fetch(`${apiUrl()}/tasks/${encodeURIComponent(id)}/history`, {
+        headers: getHeaders()
+      });
+
+      if (!response.ok) {
+        await handleHistoryError(response);
+        return;
+      }
+
+      const payload = (await response.json()) as { history?: AuditLogEntry[] };
+      setHistory(payload.history ?? []);
+    } catch (fetchError) {
+      const message = (fetchError as Error).message || "Unable to load task history.";
+      setHistoryError(message);
+    } finally {
+      setHistoryLoading(false);
+    }
   };
 
   const handleMembersError = async (response: Response) => {
@@ -173,6 +274,7 @@ const TaskPage = (props: TaskPageProps) => {
       setDueDate(toDateInputValue(found.dueDate ?? null));
       setTags(found.tags ?? []);
       setComments(found.comments ?? []);
+      void loadTaskHistory(found.id);
     } catch (fetchError) {
       const message = (fetchError as Error).message || "Unable to load task.";
       setError(message);
@@ -279,6 +381,7 @@ const TaskPage = (props: TaskPageProps) => {
         notify(successMessage, "success");
       }
 
+      void loadTaskHistory(updated.id);
       return updated;
     } catch (fetchError) {
       const message = (fetchError as Error).message || "Unable to update task.";
@@ -625,6 +728,62 @@ const TaskPage = (props: TaskPageProps) => {
           </div>
         </form>
 
+        <section class="audit-panel">
+          <div class="audit-header">
+            <h2>History</h2>
+            <button
+              type="button"
+              class="ghost"
+              onClick={() => {
+                const id = task()?.id;
+                if (id) {
+                  void loadTaskHistory(id);
+                }
+              }}
+            >
+              Refresh
+            </button>
+          </div>
+          <Show when={historyLoading()}>
+            <p class="helper-text">Loading history...</p>
+          </Show>
+          <Show when={historyError()}>
+            <p class="helper-text">{historyError()}</p>
+          </Show>
+          <Show when={!historyLoading() && history().length === 0}>
+            <p class="helper-text">No history entries yet.</p>
+          </Show>
+          <Show when={history().length > 0}>
+            <div class="audit-list">
+              <For each={history()}>
+                {(entry) => (
+                  <article class="audit-item">
+                    <div class="audit-meta">
+                      <span class="status-pill">{formatAuditAction(entry.action)}</span>
+                      <span class="audit-meta__info">
+                        {entry.actor} on {new Date(entry.at).toLocaleString()}
+                      </span>
+                    </div>
+                    <Show when={getAuditChanges(entry.changes).length > 0}>
+                      <div class="audit-changes">
+                        <For each={getAuditChanges(entry.changes)}>
+                          {([field, change]) => (
+                            <div class="audit-change">
+                              <span class="audit-field">{formatAuditField(field)}</span>
+                              <span class="audit-value">{formatAuditValue(change.from)}</span>
+                              <span class="audit-arrow">-&gt;</span>
+                              <span class="audit-value">{formatAuditValue(change.to)}</span>
+                            </div>
+                          )}
+                        </For>
+                      </div>
+                    </Show>
+                  </article>
+                )}
+              </For>
+            </div>
+          </Show>
+        </section>
       </Show>
     </section>
   );
