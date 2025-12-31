@@ -4,7 +4,15 @@ import fastifyWebsocket from "@fastify/websocket";
 import WebSocket from "ws";
 import { findUserByUsername } from "./usersStore";
 import { addChatMessage, getChatHistory } from "./chatStore";
-import type { ChatMessage, ChatClientEvent, ChatServerEvent } from "./chatTypes";
+import { addDirectMessage, getDirectHistory, getDirectKey } from "./directChatStore";
+import type {
+  ChatMessage,
+  ChatClientEvent,
+  ChatServerEvent,
+  DirectChatClientEvent,
+  DirectChatMessage,
+  DirectChatServerEvent
+} from "./chatTypes";
 import type { UserRole } from "./db";
 
 const MAX_MESSAGE_LENGTH = 512;
@@ -18,8 +26,9 @@ const chatRoutes: FastifyPluginAsync = async (server) => {
   await server.register(fastifyWebsocket);
 
   const rooms = new Map<string | null, Set<WebSocket>>();
+  const directRooms = new Map<string, Set<WebSocket>>();
 
-  const sendEvent = (socket: WebSocket, event: ChatServerEvent) => {
+  const sendEvent = (socket: WebSocket, event: ChatServerEvent | DirectChatServerEvent) => {
     if (socket.readyState !== WebSocket.OPEN) {
       return;
     }
@@ -45,6 +54,24 @@ const chatRoutes: FastifyPluginAsync = async (server) => {
     room.delete(socket);
     if (room.size === 0) {
       rooms.delete(company);
+    }
+  };
+
+  const joinDirectRoom = (key: string, socket: WebSocket) => {
+    const room = directRooms.get(key) ?? new Set<WebSocket>();
+    room.add(socket);
+    directRooms.set(key, room);
+    return room;
+  };
+
+  const leaveDirectRoom = (key: string, socket: WebSocket) => {
+    const room = directRooms.get(key);
+    if (!room) {
+      return;
+    }
+    room.delete(socket);
+    if (room.size === 0) {
+      directRooms.delete(key);
     }
   };
 
@@ -126,6 +153,107 @@ const chatRoutes: FastifyPluginAsync = async (server) => {
 
       const cleanUp = () => {
         leaveRoom(company, socket);
+        socket.off("message", handleMessage);
+      };
+
+      socket.on("message", handleMessage);
+      socket.on("close", cleanUp);
+      socket.on("error", cleanUp);
+    }
+  );
+
+  server.get<{ Querystring: { token?: string; peer?: string } }>(
+    "/teams/direct",
+    { websocket: true },
+    function (socket, request) {
+      const token = request.query?.token;
+      const peer = request.query?.peer;
+      if (!token || typeof token !== "string") {
+        sendEvent(socket, { type: "error", message: "Authentication token is required" });
+        socket.close();
+        return;
+      }
+      if (!peer || typeof peer !== "string") {
+        sendEvent(socket, { type: "error", message: "Direct chat peer is required" });
+        socket.close();
+        return;
+      }
+
+      let payload: JwtPayload;
+      try {
+        payload = this.jwt.verify(token) as JwtPayload;
+      } catch {
+        sendEvent(socket, { type: "error", message: "Invalid authentication token" });
+        socket.close();
+        return;
+      }
+
+      const user = findUserByUsername(payload.username);
+      if (!user) {
+        sendEvent(socket, { type: "error", message: "User not found" });
+        socket.close();
+        return;
+      }
+
+      const peerUser = findUserByUsername(peer);
+      if (!peerUser) {
+        sendEvent(socket, { type: "error", message: "Peer user not found" });
+        socket.close();
+        return;
+      }
+
+      if (!user.company || !peerUser.company || user.company !== peerUser.company) {
+        sendEvent(socket, { type: "error", message: "Direct chat is only available within your company" });
+        socket.close();
+        return;
+      }
+
+      const roomKey = getDirectKey(user.username, peerUser.username);
+      const room = joinDirectRoom(roomKey, socket);
+      sendEvent(socket, { type: "history", messages: getDirectHistory(roomKey) } satisfies DirectChatServerEvent);
+
+      const handleMessage = (raw: WebSocket.Data) => {
+        let messagePayload: DirectChatClientEvent;
+        try {
+          const rawText = typeof raw === "string" ? raw : raw.toString();
+          messagePayload = JSON.parse(rawText) as DirectChatClientEvent;
+        } catch {
+          sendEvent(socket, { type: "error", message: "Unable to parse chat message" });
+          return;
+        }
+
+        if (messagePayload.type !== "message") {
+          sendEvent(socket, { type: "error", message: "Unsupported message type" });
+          return;
+        }
+
+        const trimmed = (messagePayload.text ?? "").trim();
+        if (!trimmed) {
+          sendEvent(socket, { type: "error", message: "Message cannot be empty" });
+          return;
+        }
+
+        if (trimmed.length > MAX_MESSAGE_LENGTH) {
+          sendEvent(socket, { type: "error", message: "Message is too long" });
+          return;
+        }
+
+        const message: DirectChatMessage = {
+          id: randomUUID(),
+          sender: user.username,
+          recipient: peerUser.username,
+          text: trimmed,
+          createdAt: new Date().toISOString()
+        };
+        addDirectMessage(roomKey, message);
+
+        for (const recipientSocket of room) {
+          sendEvent(recipientSocket, { type: "message", message } satisfies DirectChatServerEvent);
+        }
+      };
+
+      const cleanUp = () => {
+        leaveDirectRoom(roomKey, socket);
         socket.off("message", handleMessage);
       };
 
