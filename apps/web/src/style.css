@@ -482,6 +482,33 @@ label {
   gap: 0.4rem;
 }
 
+.teams-chat__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.teams-chat__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.teams-chat__call,
+.teams-chat__call-end {
+  height: 32px;
+  padding: 0 0.85rem;
+  font-size: 0.8rem;
+}
+
+.teams-chat__call-status {
+  margin: 0;
+}
+
+.teams-chat__audio {
+  display: none;
+}
+
 .teams-chat__dot {
   width: 8px;
   height: 8px;
@@ -1687,6 +1714,41 @@ label {
   background: #0b1c2c;
   border-color: rgba(59, 130, 246, 0.45);
   color: #bfdbfe;
+}
+
+.call-toast-stack {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.call-toast {
+  pointer-events: auto;
+  min-width: 260px;
+  max-width: min(360px, 90vw);
+  padding: 0.95rem 1.1rem;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  border: 1px solid var(--surface-border);
+  background: var(--surface-card);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.3);
+  color: var(--text-primary);
+}
+
+.call-toast__content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.call-toast__actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
 }
 
 .knowledge-grid {

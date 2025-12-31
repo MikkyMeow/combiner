@@ -2,7 +2,39 @@ import { createEffect, createSignal, For, Show, onCleanup } from "solid-js";
 import type { NotificationType } from "../components/notifications/useNotifications";
 import type { UserRole } from "../types/user";
 
-const apiUrl = () => import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+const apiUrl = () => {
+  const pageIsSecure = window.location.protocol === "https:";
+  let envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && envUrl.includes("localhost")) {
+    envUrl = envUrl.replace("localhost", window.location.hostname);
+  }
+  if (envUrl) {
+    if (pageIsSecure && envUrl.startsWith("http:")) {
+      return "/api";
+    }
+    return envUrl;
+  }
+  return "/api";
+};
+
+const buildWsUrl = (path: string) => {
+  const base = apiUrl();
+  const pageIsSecure = window.location.protocol === "https:";
+  let url: URL;
+
+  if (base.startsWith("/")) {
+    url = new URL(base, window.location.origin);
+  } else {
+    url = new URL(base);
+    if (pageIsSecure && url.protocol === "http:") {
+      url = new URL("/api", window.location.origin);
+    }
+  }
+
+  url.protocol = pageIsSecure || url.protocol === "https:" ? "wss:" : "ws:";
+  url.pathname = `${url.pathname.replace(/\/$/, "")}${path}`;
+  return url;
+};
 
 type ChatMessage = {
   id: string;
@@ -41,12 +73,26 @@ type ChatClientEvent = {
 type DirectChatServerEvent =
   | { type: "history"; messages: DirectChatMessage[] }
   | { type: "message"; message: DirectChatMessage }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "call-request"; from: string }
+  | { type: "call-accept"; from: string }
+  | { type: "call-reject"; from: string }
+  | { type: "call-offer"; from: string; offer: RTCSessionDescriptionInit }
+  | { type: "call-answer"; from: string; answer: RTCSessionDescriptionInit }
+  | { type: "call-ice"; from: string; candidate: RTCIceCandidateInit }
+  | { type: "call-end"; from: string; reason?: string };
 
 type DirectChatClientEvent = {
   type: "message";
   text: string;
-};
+}
+  | { type: "call-request" }
+  | { type: "call-accept" }
+  | { type: "call-reject" }
+  | { type: "call-offer"; offer: RTCSessionDescriptionInit }
+  | { type: "call-answer"; answer: RTCSessionDescriptionInit }
+  | { type: "call-ice"; candidate: RTCIceCandidateInit }
+  | { type: "call-end"; reason?: string };
 
 type TeamsPageProps = {
   jwtToken: string | null;
@@ -97,6 +143,14 @@ const TeamsPage = (props: TeamsPageProps) => {
   const [directStatus, setDirectStatus] = createSignal("Direct chat disconnected");
   const [directError, setDirectError] = createSignal<string | null>(null);
   const [directSocket, setDirectSocket] = createSignal<WebSocket | null>(null);
+  const [callState, setCallState] = createSignal<"idle" | "incoming" | "outgoing" | "connecting" | "in-call">(
+    "idle"
+  );
+  const [callStatus, setCallStatus] = createSignal<string | null>(null);
+  const [incomingCall, setIncomingCall] = createSignal<{ from: string } | null>(null);
+  let peerConnection: RTCPeerConnection | null = null;
+  let localStream: MediaStream | null = null;
+  let remoteAudioEl: HTMLAudioElement | undefined;
   let chatMessagesEl: HTMLDivElement | undefined;
   let lastMessageEl: HTMLElement | undefined;
   let directMessagesEl: HTMLDivElement | undefined;
@@ -238,6 +292,186 @@ const TeamsPage = (props: TeamsPageProps) => {
     }
   };
 
+  const canStartCall = () =>
+    Boolean(activeDirectUser()) && !isSavedMessages() && callState() === "idle";
+
+  const sendDirectEvent = (event: DirectChatClientEvent) => {
+    const socket = directSocket();
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return false;
+    }
+    socket.send(JSON.stringify(event));
+    return true;
+  };
+
+  const clearPeerConnection = () => {
+    if (peerConnection) {
+      peerConnection.onicecandidate = null;
+      peerConnection.ontrack = null;
+      peerConnection.onconnectionstatechange = null;
+      peerConnection.close();
+      peerConnection = null;
+    }
+  };
+
+  const stopLocalStream = () => {
+    if (localStream) {
+      localStream.getTracks().forEach((track) => track.stop());
+      localStream = null;
+    }
+  };
+
+  const resetRemoteAudio = () => {
+    if (remoteAudioEl) {
+      remoteAudioEl.srcObject = null;
+    }
+  };
+
+  const resetCall = (reason?: string) => {
+    clearPeerConnection();
+    stopLocalStream();
+    resetRemoteAudio();
+    setIncomingCall(null);
+    setCallState("idle");
+    if (reason) {
+      notify(reason, "info");
+    }
+    setCallStatus(null);
+  };
+
+  const endCall = (reason?: string, notifyPeer = true) => {
+    if (notifyPeer && callState() !== "idle") {
+      sendDirectEvent({ type: "call-end", reason });
+    }
+    resetCall(reason);
+  };
+
+  const ensureLocalStream = async () => {
+    if (localStream) {
+      return localStream;
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      notify(
+        "Microphone access is unavailable. Use HTTPS (or localhost) and allow mic permissions.",
+        "error"
+      );
+      throw new Error("Media devices unavailable.");
+    }
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      return localStream;
+    } catch (error) {
+      notify((error as Error).message || "Unable to access the microphone.", "error");
+      throw error;
+    }
+  };
+
+  const ensurePeerConnection = (peer: string) => {
+    if (peerConnection) {
+      return peerConnection;
+    }
+    const connection = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+    });
+    connection.onicecandidate = (event) => {
+      if (!event.candidate) {
+        return;
+      }
+      const candidate = event.candidate.toJSON ? event.candidate.toJSON() : event.candidate;
+      sendDirectEvent({ type: "call-ice", candidate });
+    };
+    connection.ontrack = (event) => {
+      const stream = event.streams[0];
+      if (stream && remoteAudioEl) {
+        remoteAudioEl.srcObject = stream;
+        void remoteAudioEl.play().catch(() => {
+          /* ignore autoplay blocking */
+        });
+      }
+    };
+    connection.onconnectionstatechange = () => {
+      if (!connection) {
+        return;
+      }
+      if (connection.connectionState === "connected") {
+        setCallState("in-call");
+        if (peer) {
+          setCallStatus(`In call with ${peer}.`);
+        }
+        return;
+      }
+      if (
+        connection.connectionState === "failed" ||
+        connection.connectionState === "disconnected" ||
+        connection.connectionState === "closed"
+      ) {
+        resetCall("Call ended.");
+      }
+    };
+    peerConnection = connection;
+    return connection;
+  };
+
+  const attachLocalTracks = (connection: RTCPeerConnection, stream: MediaStream) => {
+    const senders = connection.getSenders();
+    for (const track of stream.getTracks()) {
+      if (senders.some((sender) => sender.track === track)) {
+        continue;
+      }
+      connection.addTrack(track, stream);
+    }
+  };
+
+  const prepareLocalMedia = async (peer: string) => {
+    const stream = await ensureLocalStream();
+    const connection = ensurePeerConnection(peer);
+    attachLocalTracks(connection, stream);
+    return connection;
+  };
+
+  const startCall = async () => {
+    if (!canStartCall()) {
+      return;
+    }
+    const peer = activeDirectUser();
+    if (!peer) {
+      return;
+    }
+    if (!sendDirectEvent({ type: "call-request" })) {
+      notify("Direct chat is not connected yet.", "warning");
+      return;
+    }
+    setCallState("outgoing");
+    setCallStatus(`Calling ${peer}...`);
+  };
+
+  const acceptCall = async () => {
+    const incoming = incomingCall();
+    if (!incoming) {
+      return;
+    }
+    setIncomingCall(null);
+    setCallState("connecting");
+    setCallStatus(`Connecting to ${incoming.from}...`);
+    if (!sendDirectEvent({ type: "call-accept" })) {
+      resetCall("Direct chat disconnected.");
+      return;
+    }
+    try {
+      await prepareLocalMedia(incoming.from);
+    } catch {
+      sendDirectEvent({ type: "call-reject" });
+      resetCall("Call cancelled.");
+    }
+  };
+
+  const rejectCall = () => {
+    if (!incomingCall()) {
+      return;
+    }
+    sendDirectEvent({ type: "call-reject" });
+    resetCall(null);
+  };
 
   const canSendChat = () => {
     return (
@@ -443,8 +677,7 @@ const TeamsPage = (props: TeamsPageProps) => {
       return;
     }
 
-    const socketUrl = new URL(`${apiUrl()}/teams/chat`);
-    socketUrl.protocol = socketUrl.protocol === "https:" ? "wss:" : "ws:";
+    const socketUrl = buildWsUrl("/teams/chat");
     socketUrl.searchParams.set("token", token);
 
     const socket = new WebSocket(socketUrl.toString());
@@ -506,6 +739,9 @@ const TeamsPage = (props: TeamsPageProps) => {
       setDirectStatus("Direct chat is restricted to owners and employees.");
       setDirectSocket(null);
       setDirectMessages([]);
+      if (callState() !== "idle") {
+        resetCall("Call ended.");
+      }
       return;
     }
 
@@ -515,6 +751,9 @@ const TeamsPage = (props: TeamsPageProps) => {
       setDirectStatus("Sign in to access direct chats.");
       setDirectMessages([]);
       setDirectSocket(null);
+      if (callState() !== "idle") {
+        resetCall("Call ended.");
+      }
       return;
     }
 
@@ -522,11 +761,13 @@ const TeamsPage = (props: TeamsPageProps) => {
       setDirectStatus("Pick a teammate to start a direct chat.");
       setDirectMessages([]);
       setDirectSocket(null);
+      if (callState() !== "idle") {
+        resetCall("Call ended.");
+      }
       return;
     }
 
-    const socketUrl = new URL(`${apiUrl()}/teams/direct`);
-    socketUrl.protocol = socketUrl.protocol === "https:" ? "wss:" : "ws:";
+    const socketUrl = buildWsUrl("/teams/direct");
     socketUrl.searchParams.set("token", token);
     socketUrl.searchParams.set("peer", peer);
 
@@ -539,7 +780,7 @@ const TeamsPage = (props: TeamsPageProps) => {
       setDirectStatus(`Connected to ${peer}.`);
     };
 
-    const handleMessage = (event: MessageEvent) => {
+    const handleMessage = async (event: MessageEvent) => {
       try {
         const payload = JSON.parse(event.data) as DirectChatServerEvent;
         if (payload.type === "history") {
@@ -549,6 +790,85 @@ const TeamsPage = (props: TeamsPageProps) => {
         }
         if (payload.type === "message") {
           setDirectMessages((current) => [...current, payload.message].slice(-200));
+          return;
+        }
+        if (payload.type === "call-request") {
+          if (callState() !== "idle") {
+            sendDirectEvent({ type: "call-reject" });
+            return;
+          }
+          setIncomingCall({ from: payload.from });
+          setCallState("incoming");
+          setCallStatus(`${payload.from} is calling...`);
+          return;
+        }
+        if (payload.type === "call-accept") {
+          if (callState() !== "outgoing") {
+            return;
+          }
+          const target = payload.from;
+          setCallState("connecting");
+          setCallStatus(`Connecting to ${target}...`);
+          try {
+            const connection = await prepareLocalMedia(target);
+            const offer = await connection.createOffer();
+            await connection.setLocalDescription(offer);
+            sendDirectEvent({ type: "call-offer", offer });
+          } catch {
+            sendDirectEvent({ type: "call-end", reason: "Call setup failed." });
+            resetCall("Unable to start the call.");
+          }
+          return;
+        }
+        if (payload.type === "call-reject") {
+          resetCall("Call rejected.");
+          return;
+        }
+        if (payload.type === "call-offer") {
+          const target = payload.from;
+          setCallState("connecting");
+          setCallStatus(`Connecting to ${target}...`);
+          try {
+            const connection = await prepareLocalMedia(target);
+            await connection.setRemoteDescription(new RTCSessionDescription(payload.offer));
+            const answer = await connection.createAnswer();
+            await connection.setLocalDescription(answer);
+            sendDirectEvent({ type: "call-answer", answer });
+            setCallState("in-call");
+            setCallStatus(`In call with ${target}.`);
+          } catch {
+            sendDirectEvent({ type: "call-end", reason: "Call setup failed." });
+            resetCall("Unable to answer the call.");
+          }
+          return;
+        }
+        if (payload.type === "call-answer") {
+          if (!peerConnection) {
+            return;
+          }
+          try {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(payload.answer));
+            setCallState("in-call");
+            setCallStatus(`In call with ${payload.from}.`);
+          } catch {
+            sendDirectEvent({ type: "call-end", reason: "Call setup failed." });
+            resetCall("Unable to connect the call.");
+          }
+          return;
+        }
+        if (payload.type === "call-ice") {
+          if (!peerConnection) {
+            return;
+          }
+          try {
+            await peerConnection.addIceCandidate(payload.candidate);
+          } catch {
+            /* ignore ICE errors */
+          }
+          return;
+        }
+        if (payload.type === "call-end") {
+          resetCall(payload.reason ?? "Call ended.");
           return;
         }
         if (payload.type === "error") {
@@ -562,11 +882,17 @@ const TeamsPage = (props: TeamsPageProps) => {
     const handleClose = () => {
       setDirectStatus("Direct chat disconnected.");
       setDirectSocket(null);
+      if (callState() !== "idle") {
+        resetCall("Call ended.");
+      }
     };
 
     const handleError = () => {
       setDirectError("Unable to reach direct chat service.");
       setDirectStatus("Direct chat unavailable.");
+      if (callState() !== "idle") {
+        resetCall("Call ended.");
+      }
     };
 
     socket.addEventListener("open", handleOpen);
@@ -636,6 +962,9 @@ const TeamsPage = (props: TeamsPageProps) => {
                                   class="ghost teams-member__action"
                                   type="button"
                                   onClick={() => {
+                                    if (callState() !== "idle") {
+                                      endCall("Call ended.");
+                                    }
                                     setActiveDirectUser(member.username);
                                     setDirectMessages([]);
                                     setDirectError(null);
@@ -664,6 +993,9 @@ const TeamsPage = (props: TeamsPageProps) => {
                                   class="ghost teams-member__action"
                                   type="button"
                                   onClick={() => {
+                                    if (callState() !== "idle") {
+                                      endCall("Call ended.");
+                                    }
                                     if (chatUser()) {
                                       setActiveDirectUser(chatUser());
                                     }
@@ -703,6 +1035,9 @@ const TeamsPage = (props: TeamsPageProps) => {
                       }}
                       type="button"
                       onClick={() => {
+                        if (callState() !== "idle") {
+                          endCall("Call ended.");
+                        }
                         setActiveDirectUser(null);
                         setActiveChannel("global");
                         setDirectMessages([]);
@@ -746,16 +1081,42 @@ const TeamsPage = (props: TeamsPageProps) => {
                   <p class="helper-text">Loading chat identity...</p>
                 </Show>
               </div>
-              <div class="teams-chat__status">
-                <span class="teams-chat__dot" aria-hidden="true" />
-                <span class="small-text">
-                  <Show when={activeDirectUser()}>{directStatus()}</Show>
-                  <Show when={!activeDirectUser()}>{chatStatus()}</Show>
-                </span>
+              <div class="teams-chat__meta">
+                <div class="teams-chat__status">
+                  <span class="teams-chat__dot" aria-hidden="true" />
+                  <span class="small-text">
+                    <Show when={activeDirectUser()}>{directStatus()}</Show>
+                    <Show when={!activeDirectUser()}>{chatStatus()}</Show>
+                  </span>
+                </div>
+                <Show when={activeDirectUser() && !isSavedMessages()}>
+                  <div class="teams-chat__actions">
+                    <button
+                      class="primary teams-chat__call"
+                      type="button"
+                      onClick={startCall}
+                      disabled={!canStartCall()}
+                    >
+                      Call
+                    </button>
+                    <Show when={callState() === "outgoing" || callState() === "connecting" || callState() === "in-call"}>
+                      <button
+                        class="ghost teams-chat__call-end"
+                        type="button"
+                        onClick={() => endCall("Call ended.")}
+                      >
+                        End
+                      </button>
+                    </Show>
+                  </div>
+                </Show>
               </div>
             </header>
             <Show when={profileLoading()}>
               <p class="helper-text">Refreshing company membership...</p>
+            </Show>
+            <Show when={callStatus() && activeDirectUser()}>
+              <p class="helper-text teams-chat__call-status">{callStatus()}</p>
             </Show>
             <Show when={!activeDirectUser()}>
               <div
@@ -827,6 +1188,9 @@ const TeamsPage = (props: TeamsPageProps) => {
                   class="ghost teams-chat__switch"
                   type="button"
                   onClick={() => {
+                    if (callState() !== "idle") {
+                      endCall("Call ended.");
+                    }
                     setActiveDirectUser(null);
                     setDirectMessages([]);
                     setDirectError(null);
@@ -901,8 +1265,39 @@ const TeamsPage = (props: TeamsPageProps) => {
           </article>
         </div>
       </Show>
+      <audio
+        ref={(el) => {
+          remoteAudioEl = el;
+        }}
+        class="teams-chat__audio"
+        autoplay
+      />
+      <Show when={incomingCall()}>
+        {(call) => (
+          <div class="call-toast-stack" aria-live="assertive">
+            <div class="call-toast" role="alert">
+              <div class="call-toast__content">
+                <strong>Incoming call</strong>
+                <span class="small-text">{call().from} is calling.</span>
+              </div>
+              <div class="call-toast__actions">
+                <button class="primary" type="button" onClick={acceptCall}>
+                  Accept
+                </button>
+                <button class="ghost" type="button" onClick={rejectCall}>
+                  Reject
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Show>
     </section>
   );
 };
 
 export default TeamsPage;
+
+
+
+

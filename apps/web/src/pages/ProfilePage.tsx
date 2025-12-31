@@ -5,7 +5,20 @@ import type { UserRole } from "../types/user";
 import { getStatusPillClass } from "../types/task";
 import type { TaskRecord } from "../types/task";
 
-const apiUrl = () => import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+const apiUrl = () => {
+  const pageIsSecure = window.location.protocol === "https:";
+  let envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && envUrl.includes("localhost")) {
+    envUrl = envUrl.replace("localhost", window.location.hostname);
+  }
+  if (envUrl) {
+    if (pageIsSecure && envUrl.startsWith("http:")) {
+      return "/api";
+    }
+    return envUrl;
+  }
+  return "/api";
+};
 
 const ROLE_LABELS: Record<UserRole, string> = {
   owner: "Owner",
@@ -544,3 +557,7 @@ const ProfilePage = ({ jwtToken, onNotify, onTokenRefresh, onUnauthorized }: Pro
 };
 
 export default ProfilePage;
+
+
+
+

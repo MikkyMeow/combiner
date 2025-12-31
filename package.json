@@ -6,8 +6,8 @@
   "workspaces": ["apps/*"],
   "scripts": {
     "dev:web": "pnpm --filter web dev",
-    "dev:api": "pnpm --filter api dev",
-    "dev": "concurrently \"pnpm dev:api\" \"pnpm dev:web\"",
+    "dev:api": "pnpm --filter api dev -- --debug",
+    "dev": "concurrently \"pnpm dev:api\" \"pnpm dev:web -- --debug\"",
     "build": "pnpm --filter api build && pnpm --filter web build"
   },
   "devDependencies": {

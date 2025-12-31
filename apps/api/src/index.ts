@@ -12,7 +12,8 @@ const server = Fastify({ logger: true });
 
 server.register(cors, {
   origin: true,
-  methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]
+  methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Authorization", "Content-Type"]
 });
 
 server.get("/hello", async () => ({ message: "Hello from backend" }));

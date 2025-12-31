@@ -9,7 +9,20 @@ import {
 import type { TaskRecord, TaskStatus } from "../types/task";
 import type { AuditLogEntry, AuditChange } from "../types/audit";
 
-const apiUrl = () => import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+const apiUrl = () => {
+  const pageIsSecure = window.location.protocol === "https:";
+  let envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && envUrl.includes("localhost")) {
+    envUrl = envUrl.replace("localhost", window.location.hostname);
+  }
+  if (envUrl) {
+    if (pageIsSecure && envUrl.startsWith("http:")) {
+      return "/api";
+    }
+    return envUrl;
+  }
+  return "/api";
+};
 type TaskViewMode = "list" | "kanban";
 type TaskSortField = "title" | "status";
 type TaskSortOrder = "asc" | "desc";
@@ -1489,3 +1502,7 @@ const ProjectPage = (props: ProjectPageProps) => {
 };
 
 export default ProjectPage;
+
+
+
+

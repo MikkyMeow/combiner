@@ -75,6 +75,19 @@ const chatRoutes: FastifyPluginAsync = async (server) => {
     }
   };
 
+  const relayDirectEvent = (
+    room: Set<WebSocket>,
+    origin: WebSocket,
+    event: DirectChatServerEvent
+  ) => {
+    for (const recipientSocket of room) {
+      if (recipientSocket === origin) {
+        continue;
+      }
+      sendEvent(recipientSocket, event);
+    }
+  };
+
   server.get<{ Querystring: { token?: string } }>(
     "/teams/chat",
     { websocket: true },
@@ -222,34 +235,97 @@ const chatRoutes: FastifyPluginAsync = async (server) => {
           return;
         }
 
-        if (messagePayload.type !== "message") {
-          sendEvent(socket, { type: "error", message: "Unsupported message type" });
+        if (messagePayload.type === "message") {
+          const trimmed = (messagePayload.text ?? "").trim();
+          if (!trimmed) {
+            sendEvent(socket, { type: "error", message: "Message cannot be empty" });
+            return;
+          }
+
+          if (trimmed.length > MAX_MESSAGE_LENGTH) {
+            sendEvent(socket, { type: "error", message: "Message is too long" });
+            return;
+          }
+
+          const message: DirectChatMessage = {
+            id: randomUUID(),
+            sender: user.username,
+            recipient: peerUser.username,
+            text: trimmed,
+            createdAt: new Date().toISOString()
+          };
+          addDirectMessage(roomKey, message);
+
+          for (const recipientSocket of room) {
+            sendEvent(recipientSocket, { type: "message", message } satisfies DirectChatServerEvent);
+          }
           return;
         }
 
-        const trimmed = (messagePayload.text ?? "").trim();
-        if (!trimmed) {
-          sendEvent(socket, { type: "error", message: "Message cannot be empty" });
+        if (messagePayload.type === "call-request") {
+          relayDirectEvent(room, socket, { type: "call-request", from: user.username });
           return;
         }
 
-        if (trimmed.length > MAX_MESSAGE_LENGTH) {
-          sendEvent(socket, { type: "error", message: "Message is too long" });
+        if (messagePayload.type === "call-accept") {
+          relayDirectEvent(room, socket, { type: "call-accept", from: user.username });
           return;
         }
 
-        const message: DirectChatMessage = {
-          id: randomUUID(),
-          sender: user.username,
-          recipient: peerUser.username,
-          text: trimmed,
-          createdAt: new Date().toISOString()
-        };
-        addDirectMessage(roomKey, message);
-
-        for (const recipientSocket of room) {
-          sendEvent(recipientSocket, { type: "message", message } satisfies DirectChatServerEvent);
+        if (messagePayload.type === "call-reject") {
+          relayDirectEvent(room, socket, { type: "call-reject", from: user.username });
+          return;
         }
+
+        if (messagePayload.type === "call-offer") {
+          if (!messagePayload.offer) {
+            sendEvent(socket, { type: "error", message: "Call offer is required" });
+            return;
+          }
+          relayDirectEvent(room, socket, {
+            type: "call-offer",
+            from: user.username,
+            offer: messagePayload.offer
+          });
+          return;
+        }
+
+        if (messagePayload.type === "call-answer") {
+          if (!messagePayload.answer) {
+            sendEvent(socket, { type: "error", message: "Call answer is required" });
+            return;
+          }
+          relayDirectEvent(room, socket, {
+            type: "call-answer",
+            from: user.username,
+            answer: messagePayload.answer
+          });
+          return;
+        }
+
+        if (messagePayload.type === "call-ice") {
+          if (!messagePayload.candidate) {
+            sendEvent(socket, { type: "error", message: "ICE candidate is required" });
+            return;
+          }
+          relayDirectEvent(room, socket, {
+            type: "call-ice",
+            from: user.username,
+            candidate: messagePayload.candidate
+          });
+          return;
+        }
+
+        if (messagePayload.type === "call-end") {
+          relayDirectEvent(room, socket, {
+            type: "call-end",
+            from: user.username,
+            reason: messagePayload.reason
+          });
+          return;
+        }
+
+        sendEvent(socket, { type: "error", message: "Unsupported message type" });
       };
 
       const cleanUp = () => {
