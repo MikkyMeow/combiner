@@ -1281,6 +1281,10 @@ label {
     background: rgba(148, 163, 184, 0.12);
   }
 
+.tasks-table tbody tr.status-row--archived {
+  background: rgba(148, 163, 184, 0.08);
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -1310,6 +1314,11 @@ label {
   .status-pill--backlog {
     background: rgba(148, 163, 184, 0.35);
     color: #475569;
+  }
+
+  .status-pill--archived {
+    background: rgba(148, 163, 184, 0.2);
+    color: #64748b;
   }
 
   .status-pill--custom {

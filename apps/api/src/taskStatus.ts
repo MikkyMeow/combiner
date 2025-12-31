@@ -2,7 +2,8 @@ export const DEFAULT_TASK_STATUSES = [
   "Backlog",
   "To do",
   "In progress",
-  "Done"
+  "Done",
+  "Archived"
 ] as const;
 
 export type TaskStatus = string;

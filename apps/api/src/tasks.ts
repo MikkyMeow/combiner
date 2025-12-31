@@ -2,7 +2,6 @@ import { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { randomUUID } from "crypto";
 import { findProjectForUser } from "./projectsStore";
 import {
-  deleteTask,
   findTaskRowById,
   insertTask,
   listTasks,
@@ -428,8 +427,19 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
         return reply.status(404).send({ message: "Task not found" });
       }
 
-      const deleted = deleteTask(taskRow.id);
-      if (!deleted) {
+      const currentProject = taskRow.projectId
+        ? findProjectForUser(username, taskRow.projectId)
+        : null;
+      const allowedStatuses = currentProject?.taskStatuses ?? DEFAULT_TASK_STATUSES;
+      const archivedStatus = findStatusMatch("Archived", allowedStatuses) ?? "Archived";
+
+      if (taskRow.status === archivedStatus) {
+        return { message: "Task already archived" };
+      }
+
+      const now = new Date().toISOString();
+      const archived = updateTask(taskRow.id, { status: archivedStatus, updatedAt: now });
+      if (!archived) {
         return reply.status(404).send({ message: "Task not found" });
       }
 
@@ -438,20 +448,20 @@ const tasksRoutes: FastifyPluginAsync = async (server) => {
           ...taskRow,
           createdBy: taskRow.createdBy ?? taskRow.username
         }),
-        null,
+        buildTaskSnapshot(archived),
         TASK_AUDIT_FIELDS
       );
       appendAuditLog({
-        at: new Date().toISOString(),
+        at: now,
         actor: username,
         entity: "task",
         entityId: taskRow.id,
         projectId: taskRow.projectId,
-        action: "delete",
+        action: "update",
         changes
       });
 
-      return { message: "Task deleted" };
+      return { message: "Task archived" };
     }
   );
 };

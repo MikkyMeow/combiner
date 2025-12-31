@@ -2,7 +2,8 @@ export const TASK_STATUS_OPTIONS = [
   "Backlog",
   "To do",
   "In progress",
-  "Done"
+  "Done",
+  "Archived"
 ] as const;
 export type TaskStatus = string;
 
@@ -26,7 +27,8 @@ const statusSuffixMap: Record<string, string> = {
   backlog: "backlog",
   "to do": "todo",
   "in progress": "in-progress",
-  done: "done"
+  done: "done",
+  archived: "archived"
 };
 
 export const getStatusSuffix = (status: TaskStatus) =>

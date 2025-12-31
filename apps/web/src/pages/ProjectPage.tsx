@@ -820,29 +820,7 @@ const ProjectPage = (props: ProjectPageProps) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!props.jwtToken) {
-      handleUnauthorized();
-      return;
-    }
-
-    try {
-      const response = await fetch(`${apiUrl()}/tasks/${encodeURIComponent(id)}`, {
-        method: "DELETE",
-        headers: getHeaders()
-      });
-
-      if (!response.ok) {
-        await handleFetchError(response);
-        return;
-      }
-
-      setTasks((current) => current.filter((task) => task.id !== id));
-      notify("Task removed", "success");
-    } catch (fetchError) {
-      const message = (fetchError as Error).message || "Unable to remove task.";
-      setError(message);
-      notify(message, "error");
-    }
+    await updateTask(id, { status: "Archived" }, "Task archived");
   };
 
   const handleDeleteNote = async (noteId: string) => {
@@ -1272,7 +1250,7 @@ const ProjectPage = (props: ProjectPageProps) => {
                                         class="ghost"
                                         onClick={() => handleDelete(task.id)}
                                       >
-                                        Delete
+                                        Archive
                                       </button>
                                     </div>
                                   </td>
@@ -1351,7 +1329,7 @@ const ProjectPage = (props: ProjectPageProps) => {
                                     class="ghost"
                                     onClick={() => handleDelete(task.id)}
                                   >
-                                    Delete
+                                    Archive
                                   </button>
                                 </div>
                               </article>
