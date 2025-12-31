@@ -10,6 +10,7 @@ type ChatMessage = {
   company: string | null;
   text: string;
   createdAt: string;
+  pending?: boolean;
 };
 
 type CompanyMember = {
@@ -50,6 +51,13 @@ const formatRoleLabel = (role: UserRole) => {
   return "User";
 };
 
+const getInitials = (value: string) => {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+};
+
 const TeamsPage = (props: TeamsPageProps) => {
   const allowed = () => props.userRole === "owner" || props.userRole === "employee";
   const [chatMessages, setChatMessages] = createSignal<ChatMessage[]>([]);
@@ -63,6 +71,8 @@ const TeamsPage = (props: TeamsPageProps) => {
   const [companyMembers, setCompanyMembers] = createSignal<CompanyMember[]>([]);
   const [membersLoading, setMembersLoading] = createSignal(false);
   const [membersError, setMembersError] = createSignal<string | null>(null);
+  let chatMessagesEl: HTMLDivElement | undefined;
+  let lastMessageEl: HTMLElement | undefined;
 
   const notify = (message: string, type: NotificationType = "info") => {
     props.onNotify?.(message, type);
@@ -197,11 +207,7 @@ const TeamsPage = (props: TeamsPageProps) => {
 
 
   const canSendChat = () => {
-    const socket = chatSocket();
     return (
-      !!socket &&
-      socket.readyState === WebSocket.OPEN &&
-      !!userCompany() &&
       chatInput().trim().length > 0
     );
   };
@@ -213,13 +219,67 @@ const TeamsPage = (props: TeamsPageProps) => {
     }
 
     const socket = chatSocket();
-    if (!socket) {
+    const text = chatInput();
+    const trimmed = text.trim();
+    if (!trimmed) {
       return;
     }
-
-    socket.send(JSON.stringify({ type: "message", text: chatInput().trim() }));
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: "message", text }));
+    } else {
+      const now = new Date().toISOString();
+      setChatMessages((current) => [
+        ...current,
+        {
+          id: `pending-${Date.now()}`,
+          sender: chatUser() ?? "You",
+          company: userCompany() ?? null,
+          text,
+          createdAt: now,
+          pending: true
+        }
+      ]);
+    }
     setChatInput("");
   };
+
+  const handleChatKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== "Enter") {
+      return;
+    }
+    if (event.shiftKey) {
+      return;
+    }
+    event.preventDefault();
+    if (!canSendChat()) {
+      return;
+    }
+    handleChatSubmit(new SubmitEvent("submit"));
+  };
+
+  const scrollChatToLatest = () => {
+    if (!chatMessagesEl || !lastMessageEl) {
+      return;
+    }
+    const containerHeight = chatMessagesEl.clientHeight;
+    const lastHeight = lastMessageEl.offsetHeight;
+    if (lastHeight > containerHeight) {
+      chatMessagesEl.scrollTop = Math.max(lastMessageEl.offsetTop - 8, 0);
+      return;
+    }
+    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+  };
+
+  createEffect(() => {
+    if (!allowed()) {
+      return;
+    }
+    const messages = chatMessages();
+    if (messages.length === 0) {
+      return;
+    }
+    queueMicrotask(scrollChatToLatest);
+  });
 
   createEffect(() => {
     if (!allowed()) {
@@ -337,16 +397,18 @@ const TeamsPage = (props: TeamsPageProps) => {
       </Show>
 
       <Show when={allowed()}>
-        <div class="teams-layout">
-          <div class="teams-layout__projects">
+        <div class="teams-layout teams-shell">
+          <div class="teams-layout__projects teams-sidebar">
             <Show when={userCompany()}>
-              <article class="profile-card profile-card--emphasis company-members">
-                <header class="profile-item-heading">
+              <article class="profile-card profile-card--emphasis company-members teams-sidebar__card">
+                <header class="profile-item-heading teams-sidebar__header">
                   <div>
                     <strong>Company teammates</strong>
                     <p class="helper-text">Roster for {userCompany()}</p>
                   </div>
-                  <span class="small-text">{companyMembers().length} member{companyMembers().length === 1 ? "" : "s"}</span>
+                  <span class="small-text">
+                    {companyMembers().length} member{companyMembers().length === 1 ? "" : "s"}
+                  </span>
                 </header>
                 <Show when={membersLoading()}>
                   <p class="helper-text">Loading company members...</p>
@@ -356,15 +418,22 @@ const TeamsPage = (props: TeamsPageProps) => {
                 </Show>
                 <Show when={!membersLoading() && !membersError()}>
                   <Show when={companyMembers().length > 0}>
-                    <ul class="company-members__list">
+                    <ul class="company-members__list teams-sidebar__list">
                       <For each={companyMembers()}>
                         {(member) => (
-                          <li class="company-members__item">
-                            <div>
-                              <strong>{member.username}</strong>
-                              <p class="helper-text">{formatRoleLabel(member.role)}</p>
+                          <li class="company-members__item teams-sidebar__item">
+                            <div class="teams-member">
+                              <div class="teams-member__avatar" aria-hidden="true">
+                                {getInitials(member.username)}
+                              </div>
+                              <div class="teams-member__meta">
+                                <strong>{member.username}</strong>
+                                <p class="helper-text">{formatRoleLabel(member.role)}</p>
+                              </div>
                             </div>
-                            <span class="company-members__role">{formatRoleLabel(member.role)}</span>
+                            <span class="company-members__role teams-member__role">
+                              {formatRoleLabel(member.role)}
+                            </span>
                           </li>
                         )}
                       </For>
@@ -377,9 +446,9 @@ const TeamsPage = (props: TeamsPageProps) => {
               </article>
             </Show>
           </div>
-          <article class="profile-card profile-card--emphasis team-chat teams-layout__chat">
-            <header class="profile-item-heading">
-              <div>
+          <article class="profile-card profile-card--emphasis team-chat teams-layout__chat teams-chat-panel">
+            <header class="profile-item-heading teams-chat__header">
+              <div class="teams-chat__title">
                 <strong>Company chat</strong>
                 <Show when={chatUser()}>
                   <p class="helper-text">
@@ -390,46 +459,75 @@ const TeamsPage = (props: TeamsPageProps) => {
                   <p class="helper-text">Loading chat identity...</p>
                 </Show>
               </div>
-              <span class="small-text">{chatStatus()}</span>
+              <div class="teams-chat__status">
+                <span class="teams-chat__dot" aria-hidden="true" />
+                <span class="small-text">{chatStatus()}</span>
+              </div>
             </header>
             <Show when={profileLoading()}>
               <p class="helper-text">Refreshing company membership...</p>
             </Show>
-            <div class="team-chat__messages">
+            <div
+              class="team-chat__messages teams-chat__messages"
+              ref={(el) => {
+                chatMessagesEl = el;
+              }}
+            >
               <Show when={chatMessages().length > 0}>
                 <For each={chatMessages()}>
-                  {(message) => (
-                    <article class="team-chat__message">
-                      <header class="team-chat__message-header">
-                        <strong>{message.sender}</strong>
-                        <span class="small-text">{formatDate(message.createdAt)}</span>
-                      </header>
-                      <p>{message.text}</p>
-                    </article>
-                  )}
+                  {(message, index) => {
+                    const isOwn = () => message.sender === chatUser();
+                    const timeLabel = () => {
+                      if (message.pending) {
+                        return "Sending...";
+                      }
+                      return formatDate(message.createdAt);
+                    };
+                    return (
+                      <article
+                        classList={{
+                          "team-chat__message": true,
+                          "team-chat__message--own": isOwn()
+                        }}
+                        ref={(el) => {
+                          if (index() === chatMessages().length - 1) {
+                            lastMessageEl = el;
+                          }
+                        }}
+                      >
+                        <div class="team-chat__bubble">
+                          <Show when={!isOwn()}>
+                            <strong class="team-chat__sender">{message.sender}</strong>
+                          </Show>
+                          <pre class="team-chat__text">{message.text}</pre>
+                          <span class="team-chat__time">{timeLabel()}</span>
+                        </div>
+                      </article>
+                    );
+                  }}
                 </For>
               </Show>
               <Show when={chatMessages().length === 0}>
                 <p class="helper-text">No messages yet.</p>
               </Show>
             </div>
-            <form class="team-chat__form" onSubmit={handleChatSubmit}>
-              <textarea
-                class="team-chat__input"
-                placeholder="Share quick updates with teammates from your company..."
-                value={chatInput()}
-                onInput={(event) => setChatInput(event.currentTarget.value)}
-                rows={3}
-              />
-              <button class="primary" type="submit" disabled={!canSendChat()}>
-                Send
-              </button>
+            <form class="team-chat__form teams-chat__form" onSubmit={handleChatSubmit}>
+              <div class="teams-chat__input-row">
+                <textarea
+                  class="team-chat__input teams-chat__input"
+                  placeholder="Write a message..."
+                  value={chatInput()}
+                  onInput={(event) => setChatInput(event.currentTarget.value)}
+                  onKeyDown={handleChatKeyDown}
+                  rows={2}
+                />
+                <button class="primary teams-chat__send" type="submit" disabled={!canSendChat()}>
+                  Send
+                </button>
+              </div>
             </form>
             <Show when={chatError()}>
               <p class="helper-text">{chatError()}</p>
-            </Show>
-            <Show when={!userCompany()}>
-              <p class="helper-text">Join or assign a company to unlock chat posting.</p>
             </Show>
           </article>
         </div>
